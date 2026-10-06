@@ -40,7 +40,7 @@ export async function openNoteForm(session, { note, event } = {}, onSaved) {
 
 // A ready prompt for the person's connected AI. The AI reads the brief and drafts; a person approves and finalizes.
 async function copyPrompt(n) {
-  const text = `Process meeting note #${n.id} ("${n.title}") in Nexus. Call get_meeting_brief with noteId ${n.id}, read the transcript, then use update_meeting_note to fill the summary, discussion, decisions, requests and follow-ups (one per line), and create_records_from_note to turn them into records. Do not repeat anything already open. I will review and finalize.`;
+  const text = `Process meeting note #${n.id} ("${n.title}") in NexusOS. Call get_meeting_brief with noteId ${n.id}, read the transcript, then use update_meeting_note to fill the summary, discussion, decisions, requests and follow-ups (one per line), and create_records_from_note to turn them into records. Do not repeat anything already open. I will review and finalize.`;
   try { await navigator.clipboard.writeText(text); alert('Copied. Paste it into your connected AI.'); } catch { alert(text); }
 }
 

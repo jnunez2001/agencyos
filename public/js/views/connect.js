@@ -36,7 +36,7 @@ export async function connectView(session, { param }) {
   return h('div', { class: 'page narrow' },
     h('div', { class: 'page-head' }, h('h1', { class: 'page-title' }, `Connect ${request.clientName}`)),
     h('section', { class: 'panel' },
-      h('p', {}, `${request.clientName} is asking to work in Nexus as you.`),
+      h('p', {}, `${request.clientName} is asking to work in NexusOS as you.`),
       h('dl', { class: 'facts' },
         h('dt', {}, 'App'), h('dd', {}, request.clientName),
         h('dt', {}, 'Returns to'), h('dd', {}, request.redirectHost),

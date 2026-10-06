@@ -156,7 +156,7 @@ async function exchangeCode({ clientId, clientSecret, redirectUri, code, fetchIm
   const res = await postForm(fetchImpl, TOKEN_URL, { grant_type: 'authorization_code', code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri });
   if (!res.ok) throw new GoogleError('Google did not accept the sign-in. Try adding the account again');
   const data = await res.json();
-  if (!data.refresh_token) throw new GoogleError('Google did not give long-lasting access. Remove Nexus from your Google account permissions and try again');
+  if (!data.refresh_token) throw new GoogleError('Google did not give long-lasting access. Remove NexusOS from your Google account permissions and try again');
   const granted = String(data.scope || '');
   if (!granted.includes('webmasters.readonly') && !granted.includes('analytics.readonly')) throw new GoogleError('Access to Search Console or Analytics was not approved');
   let email = '';

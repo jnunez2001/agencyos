@@ -30,6 +30,10 @@ test('the Owner can open every work screen and sheet without an error or stray t
   assert.match(text, /Needs a manager/);
   assert.match(text, /Meetings with no notes yet/);
   assert.match(text, /Clients at risk/);
+  assert.match(text, /Time to approve/);
+  assert.match(text, /Work in progress/);
+  assert.match(text, /Mark Cruz is over capacity/);
+  assert.match(text, /Recent results/);
   clean('dashboard');
 
   // Tasks: list, board, filters

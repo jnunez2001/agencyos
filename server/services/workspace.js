@@ -5,6 +5,7 @@ const { today, addDays } = require('./dates');
 const events = require('./events');
 const perms = require('./permissions');
 const notifications = require('./notifications');
+const capacity = require('./capacity');
 const { ServiceError } = require('./errors');
 
 function getWorkspace(db, ctx) {
@@ -51,6 +52,27 @@ function getWorkspace(db, ctx) {
       upcomingClientMeetings: db.prepare(`SELECT e.id, e.title, e.starts_at AS startsAt, c.name AS clientName FROM events e LEFT JOIN clients c ON c.id = e.client_id AND c.organization_id = e.organization_id
           WHERE e.organization_id = ? AND e.type = 'client_meeting' AND e.status = 'scheduled' AND substr(e.starts_at, 1, 10) >= ? AND substr(e.starts_at, 1, 10) <= ? ORDER BY e.starts_at LIMIT 10`).all(org, day, addDays(day, 7)),
       aiPending: perms.can(ctx.actor.role, 'ai.approve') ? one("SELECT COUNT(*) AS n FROM ai_proposals WHERE organization_id = ? AND status = 'pending'") : null,
+      // What is waiting for a person to decide.
+      approvals: {
+        timeToApprove: one("SELECT COUNT(*) AS n FROM time_entries WHERE organization_id = ? AND status = 'submitted'"),
+        qaWaiting: one("SELECT COUNT(*) AS n FROM qa_reviews WHERE organization_id = ? AND status = 'pending'"),
+        sopChangesToReview: one("SELECT COUNT(*) AS n FROM sop_change_requests WHERE organization_id = ? AND status IN ('identified','needs_review')"),
+      },
+      // What is happening.
+      happening: {
+        activeClients: one("SELECT COUNT(*) AS n FROM clients WHERE organization_id = ? AND status IN ('active','onboarding','at_risk')"),
+        activeProjects: one("SELECT COUNT(*) AS n FROM projects WHERE organization_id = ? AND status = 'active'"),
+        workInProgress: one("SELECT COUNT(*) AS n FROM tasks WHERE organization_id = ? AND status IN ('in_progress','review','changes')"),
+        recentResults: db.prepare(`SELECT r.id, r.client_id AS clientId, r.metric, r.value, r.unit, r.recorded_on AS recordedOn, c.name AS clientName FROM client_results r JOIN clients c ON c.id = r.client_id AND c.organization_id = r.organization_id
+            WHERE r.organization_id = ? ORDER BY r.recorded_on DESC, r.id DESC LIMIT 5`).all(org),
+      },
+      // What needs improving.
+      improve: {
+        tasksNeedingChanges: one("SELECT COUNT(*) AS n FROM tasks WHERE organization_id = ? AND status = 'changes'"),
+        overCapacity: perms.can(ctx.actor.role, 'time.view_team')
+          ? capacity.workloadCapacity(db, ctx).weeks[0].people.filter((p) => p.status === 'over').map((p) => ({ id: p.userId, displayName: p.displayName, utilizationPercent: p.utilizationPercent }))
+          : [],
+      },
     };
   }
   return out;

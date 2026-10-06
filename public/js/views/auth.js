@@ -6,7 +6,7 @@ import { field } from '../ui.js';
 
 function card(title, ...children) {
   return h('div', { class: 'auth' }, h('div', { class: 'auth-card' },
-    h('div', { class: 'brand-mark' }, h('img', { class: 'brand-logo', src: '/logo.png', alt: '', width: 24, height: 24 }), h('span', {}, 'Nexus')),
+    h('div', { class: 'brand-mark' }, h('img', { class: 'brand-logo', src: '/logo.png', alt: '', width: 24, height: 24 }), h('span', {}, 'NexusOS')),
     h('h1', {}, title), ...children,
     h('p', { class: 'muted' }, h('a', { class: 'link', href: '/about' }, 'About'), ' and ', h('a', { class: 'link', href: '/privacy' }, 'privacy policy'), ' and ', h('a', { class: 'link', href: '/terms' }, 'terms'))));
 }
@@ -40,7 +40,7 @@ export function setupView({ setupCodeRequired }, onDone) {
 
 // What the server says when a Google sign-in did not work. The address carries only a short code.
 export const SIGN_IN_PROBLEMS = {
-  'no-account': 'This Google account has no Nexus account. Ask an Owner or Admin to invite you with this email address.',
+  'no-account': 'This Google account has no NexusOS account. Ask an Owner or Admin to invite you with this email address.',
   disabled: 'This account is turned off. Ask an Owner or Admin.',
   locked: 'Too many attempts. Try again later.',
   denied: 'Google sign-in was cancelled.',

@@ -1,5 +1,5 @@
 // Joshua Nunez
-// Makes the Nexus logo files from the artwork: removes the dark background so only the mark is left, crops it to a
+// Makes the NexusOS logo files from the artwork: removes the dark background so only the mark is left, crops it to a
 // square and writes 512, 128 and 64 px PNGs into public/. No image library: a small PNG reader and writer.
 // Run: node scripts/logo-from-image.js path/to/artwork.png   (convert other formats first, for example with sips)
 const fs = require('fs');

@@ -31,6 +31,13 @@ export async function workspacePanels(session) {
   const owner = o && h('section', { class: 'panel' },
     h('div', { class: 'panel-head' }, h('h2', {}, 'Owner overview')),
     h('div', { class: 'figures' }, figure(o.clientsAtRisk.length, 'Clients at risk', true), figure(o.overdueTasks, 'Overdue tasks', true), figure(o.openRequests, 'Open requests')),
+    o.approvals && h('div', { class: 'figures' }, figure(o.approvals.timeToApprove, 'Time to approve', true), figure(o.approvals.qaWaiting, 'In QA', true), figure(o.approvals.sopChangesToReview, 'SOP changes to review', true)),
+    o.happening && h('div', { class: 'figures' }, figure(o.happening.activeClients, 'Active clients'), figure(o.happening.activeProjects, 'Active projects'), figure(o.happening.workInProgress, 'Work in progress')),
+    o.improve && (o.improve.overCapacity.length > 0 || o.improve.tasksNeedingChanges > 0) && h('div', { class: 'list-inner' }, h('p', { class: 'muted' }, 'Needs improvement'),
+      o.improve.tasksNeedingChanges > 0 && item('#/qa', `${o.improve.tasksNeedingChanges} ${o.improve.tasksNeedingChanges === 1 ? 'task needs' : 'tasks need'} changes after QA`, null),
+      o.improve.overCapacity.map((p) => item('#/time', `${p.displayName} is over capacity`, `${p.utilizationPercent}% of the week`, true))),
+    o.happening && o.happening.recentResults.length > 0 && h('div', { class: 'list-inner' }, h('p', { class: 'muted' }, 'Recent results'),
+      o.happening.recentResults.map((r) => item(`#/clients/${r.clientId}`, `${r.clientName}: ${r.metric} ${r.value}${r.unit ? ` ${r.unit}` : ''}`, formatDay(r.recordedOn)))),
     o.clientsAtRisk.length > 0 && h('div', { class: 'list-inner' }, o.clientsAtRisk.map((c) => item(`#/clients/${c.id}`, c.name, 'At risk', true))),
     o.upcomingClientMeetings.length > 0 && h('div', { class: 'list-inner' }, h('p', { class: 'muted' }, 'Client meetings this week'),
       o.upcomingClientMeetings.map((e) => item('#/calendar', e.title, `${formatDay(e.startsAt.slice(0, 10))}${e.clientName ? `, ${e.clientName}` : ''}`))));

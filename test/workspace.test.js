@@ -76,3 +76,20 @@ test('the Owner overview shows clients at risk, overdue work and client meetings
   const z = getWorkspace(f.db, f.zed);
   assert.deepEqual([z.owner.clientsAtRisk.length, z.owner.overdueTasks, z.owner.openRequests], [0, 0, 0]);
 });
+
+test('the Owner overview also shows what waits for a decision, what is happening, and what needs improving', async () => {
+  const f = await setup();
+  const results = require('../server/services/results');
+  const timeentries = require('../server/services/timeentries');
+  const t = tasks.createTask(f.db, f.mark, { projectId: f.project.id, title: 'Copy', assigneeId: f.ids.sarah, estimateHours: 80, dueDate: '2026-10-10' });
+  tasks.updateTask(f.db, f.mark, t.id, { status: 'in_progress' });
+  results.recordResult(f.db, f.mark, f.client.id, { metric: 'Organic leads', value: 40, unit: 'leads', recordedOn: '2026-10-08' });
+  const entry = timeentries.createEntry(f.db, f.sarah, { taskId: t.id, minutes: 60, date: '2026-10-09' });
+  timeentries.submitEntries(f.db, f.sarah, { ids: [entry.id] });
+  const o = getWorkspace(f.db, f.josh).owner;
+  assert.deepEqual([o.approvals.timeToApprove, o.approvals.qaWaiting, o.approvals.sopChangesToReview], [1, 0, 0]);
+  assert.deepEqual([o.happening.activeClients, o.happening.activeProjects, o.happening.workInProgress], [1, 0, 1]);
+  assert.deepEqual(o.happening.recentResults.map((r) => [r.clientName, r.metric, r.value]), [['Acme Dental', 'Organic leads', 40]]);
+  assert.deepEqual(o.improve.overCapacity.map((p) => p.displayName), ['Sarah'], '80 planned hours is over a 40 hour week');
+  assert.equal(getWorkspace(f.db, f.rayne).owner.improve.overCapacity.length, 1);
+});

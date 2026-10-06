@@ -24,7 +24,7 @@ function copyButton(label, getText) {
 // What the person pastes into their agent. It holds the address and a personal key, and says what to do next.
 export function setupPrompt(url, key) {
   return [
-    'Connect to my Nexus MCP server so you can help me manage my agency.',
+    'Connect to my NexusOS MCP server so you can help me manage my agency.',
     '',
     `Server URL: ${url}`,
     'Transport: streamable HTTP.',
@@ -35,7 +35,7 @@ export function setupPrompt(url, key) {
     '',
     'When it is connected, call list_team and list_clients to check it works, then tell me what you can do.',
     'To change several things at once, use apply_changes. Steps can use $name to refer to a record an earlier step created.',
-    'My changes may wait in the Nexus AI inbox until I approve them. Never ask me for my password.',
+    'My changes may wait in the NexusOS AI inbox until I approve them. Never ask me for my password.',
   ].join('\n');
 }
 
@@ -68,10 +68,10 @@ function setupTab(session, rerender) {
       h('div', { class: 'url-row' }, h('code', { class: 'code url' }, url), copyButton('Copy', () => url))),
     h('section', { class: 'panel' },
       h('div', { class: 'panel-head' }, h('h2', {}, 'Claude on the web and phone')),
-      h('ol', { class: 'steps' }, step('In claude.ai open Settings, then Connectors, then Add custom connector.'), step('Name it Nexus and paste the address above.'), step('Click Connect, sign in here if asked, then choose an access level and Approve.'))),
+      h('ol', { class: 'steps' }, step('In claude.ai open Settings, then Connectors, then Add custom connector.'), step('Name it NexusOS and paste the address above.'), step('Click Connect, sign in here if asked, then choose an access level and Approve.'))),
     h('section', { class: 'panel' },
       h('div', { class: 'panel-head' }, h('h2', {}, 'ChatGPT')),
-      h('ol', { class: 'steps' }, step('In ChatGPT turn on Developer mode, then create a custom MCP server (an app).'), step('Name it Nexus, paste the address above, and choose OAuth for authentication.'), step('Save, then connect. Sign in here if asked, choose an access level and Approve.'))),
+      h('ol', { class: 'steps' }, step('In ChatGPT turn on Developer mode, then create a custom MCP server (an app).'), step('Name it NexusOS, paste the address above, and choose OAuth for authentication.'), step('Save, then connect. Sign in here if asked, choose an access level and Approve.'))),
     h('section', { class: 'panel' },
       h('div', { class: 'panel-head' }, h('h2', {}, 'Claude Code and other agents')),
       h('p', { class: 'notice-strong' }, 'Paste the prompt only into Claude Code or an agent running on your computer. Never into a claude.ai chat: it contains your key.'),

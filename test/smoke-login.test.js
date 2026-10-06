@@ -11,7 +11,7 @@ test('the login page offers Google and explains a failed Google sign-in once', a
   await app.wait(300);
   const { document } = app;
   assert.match(document.body.textContent, /Sign in/);
-  assert.match(document.body.textContent, /no Nexus account/);
+  assert.match(document.body.textContent, /no NexusOS account/);
   assert.match(document.body.textContent, /invite you with this email/);
   const google = [...document.querySelectorAll('a.btn')].find((a) => /Sign in with Google/.test(a.textContent));
   assert.equal(google.getAttribute('href'), '/api/auth/google/start');
