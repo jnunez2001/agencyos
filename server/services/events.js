@@ -9,6 +9,7 @@ const clients = require('./clients');
 const projects = require('./projects');
 const tasks = require('./tasks');
 const perms = require('./permissions');
+const notifications = require('./notifications');
 
 const TYPES = ['client_meeting', 'internal_meeting', 'team_meeting', 'deadline', 'follow_up', 'review', 'sop_review', 'training', 'blocked_time'];
 const STATUSES = ['scheduled', 'completed', 'cancelled'];
@@ -143,6 +144,7 @@ function createEvent(db, ctx, input = {}) {
     const id = Number(db.prepare('INSERT INTO events (organization_id, title, type, starts_at, ends_at, all_day, location, notes, status, client_id, project_id, task_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(ctx.organizationId, next.title, next.type, next.startsAt, next.endsAt, next.allDay ? 1 : 0, next.location, next.notes, next.status, next.clientId, next.projectId, next.taskId, ctx.actor.id).lastInsertRowid);
     writeAttendees(db, id, attendeeIds);
+    notifications.notify(db, ctx, { userIds: attendeeIds, type: 'event_invited', title: `You are in: ${next.title}`, body: next.startsAt, link: '#/calendar', objectType: 'event', objectId: id, dedupeKey: `event_invited:${id}` });
     logActivity(db, { ...logCtx(ctx), action: 'event.create', objectType: 'event', objectId: id, after: { title: next.title, type: next.type, startsAt: next.startsAt, attendees: attendeeIds.length } });
     return getEvent(db, ctx, id);
   })();
@@ -182,7 +184,7 @@ function updateEvent(db, ctx, id, patch = {}) {
     db.prepare(`UPDATE events SET title = ?, type = ?, starts_at = ?, ends_at = ?, all_day = ?, location = ?, notes = ?, status = ?, client_id = ?, project_id = ?, task_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE organization_id = ? AND id = ?`)
       .run(next.title, next.type, next.startsAt, next.endsAt, next.allDay ? 1 : 0, next.location, next.notes, next.status, next.clientId, next.projectId, next.taskId, ctx.organizationId, current.id);
     const before = { ...d.before }; const after = { ...d.after };
-    if (!sameAttendees) { writeAttendees(db, current.id, attendeeInput); before.attendees = currentAttendees.length; after.attendees = attendeeInput.length; }
+    if (!sameAttendees) { writeAttendees(db, current.id, attendeeInput); notifications.notify(db, ctx, { userIds: attendeeInput.filter((x) => !currentAttendees.includes(x)), type: 'event_invited', title: `You are in: ${next.title}`, body: next.startsAt, link: '#/calendar', objectType: 'event', objectId: current.id, dedupeKey: `event_invited:${current.id}` }); before.attendees = currentAttendees.length; after.attendees = attendeeInput.length; }
     logActivity(db, { ...logCtx(ctx), action: 'event.update', objectType: 'event', objectId: current.id, before, after });
     return getEvent(db, ctx, id);
   })();

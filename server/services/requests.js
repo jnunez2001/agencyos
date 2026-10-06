@@ -8,6 +8,7 @@ const clients = require('./clients');
 const projects = require('./projects');
 const tasks = require('./tasks');
 const perms = require('./permissions');
+const notifications = require('./notifications');
 
 const STATUSES = ['new', 'reviewing', 'approved', 'in_progress', 'waiting', 'completed', 'rejected'];
 const STAFF_STATUSES = ['new', 'reviewing'];
@@ -79,6 +80,9 @@ function createRequest(db, ctx, input = {}, { sourceNoteId = null } = {}) {
     const id = Number(db.prepare('INSERT INTO client_requests (organization_id, client_id, project_id, title, description, status, requested_by, due_date, owner_id, source_note_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(ctx.organizationId, next.clientId, next.projectId, next.title, next.description, next.status, next.requestedBy, next.dueDate, next.ownerId, sourceNoteId, ctx.actor.id).lastInsertRowid);
     logActivity(db, { ...logCtx(ctx), action: 'request.create', objectType: 'client_request', objectId: id, after: { title: next.title, clientId: next.clientId, status: next.status, ...(sourceNoteId ? { sourceNoteId } : {}) } });
+    const accountOwner = db.prepare('SELECT account_owner_id AS id FROM clients WHERE organization_id = ? AND id = ?').get(ctx.organizationId, next.clientId);
+    notifications.notify(db, ctx, { userIds: [accountOwner && accountOwner.id], type: 'request_new', title: `New client request: ${next.title}`, link: `#/requests/${id}`, objectType: 'client_request', objectId: id, dedupeKey: `request_new:${id}` });
+    notifications.notify(db, ctx, { userIds: next.ownerId, type: 'request_assigned', title: `Client request for you: ${next.title}`, link: `#/requests/${id}`, objectType: 'client_request', objectId: id, dedupeKey: `request_assigned:${id}` });
     return getRequest(db, ctx, id);
   })();
 }
@@ -109,6 +113,7 @@ function updateRequest(db, ctx, id, patch = {}) {
     db.prepare("UPDATE client_requests SET title = ?, description = ?, status = ?, client_id = ?, project_id = ?, requested_by = ?, due_date = ?, owner_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE organization_id = ? AND id = ?")
       .run(next.title, next.description, next.status, next.clientId, next.projectId, next.requestedBy, next.dueDate, next.ownerId, ctx.organizationId, current.id);
     logActivity(db, { ...logCtx(ctx), action: 'request.update', objectType: 'client_request', objectId: current.id, before: d.before, after: d.after });
+    if (d.after.ownerId) notifications.notify(db, ctx, { userIds: next.ownerId, type: 'request_assigned', title: `Client request for you: ${next.title}`, link: `#/requests/${current.id}`, objectType: 'client_request', objectId: current.id, dedupeKey: `request_assigned:${current.id}` });
     return getRequest(db, ctx, id);
   })();
 }

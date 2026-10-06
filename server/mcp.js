@@ -11,6 +11,7 @@ const meetingnotes = require('./services/meetingnotes');
 const requests = require('./services/requests');
 const decisions = require('./services/decisions');
 const followups = require('./services/followups');
+const notifications = require('./services/notifications');
 const members = require('./services/members');
 const dashboard = require('./services/dashboard');
 const sops = require('./services/sops');
@@ -65,6 +66,7 @@ const TOOLS = [
   { name: 'get_request', description: 'One client request with its client, project, source meeting note and linked task.', schema: obj({ id: num('Request id') }, ['id']), run: (db, ctx, a) => requests.getRequest(db, ctx, a.id) },
   { name: 'list_decisions', description: 'Recorded decisions, newest first. Filters: clientId, projectId, status (active or reversed), q.', schema: obj({ clientId: num('Client id'), projectId: num('Project id'), status: str('active or reversed'), q: str('Search text') }), run: (db, ctx, a) => decisions.listDecisions(db, ctx, a) },
   { name: 'list_follow_ups', description: 'Follow-ups, open first by due date. Filters: clientId, projectId, status (open, done, cancelled), assigneeId, mine, overdue, q.', schema: obj({ clientId: num('Client id'), projectId: num('Project id'), status: str('open, done or cancelled'), assigneeId: num('Team member id'), mine: { type: 'boolean' }, overdue: { type: 'boolean' }, q: str('Search text') }), run: (db, ctx, a) => followups.listFollowUps(db, ctx, { ...a, mine: a.mine ? '1' : '', overdue: a.overdue ? '1' : '' }) },
+  { name: 'list_notifications', description: 'The key owner\'s own notifications, newest first. Pass unread to see only unread ones.', schema: obj({ unread: { type: 'boolean' } }), run: (db, ctx, a) => notifications.listNotifications(db, ctx, { unread: !!a.unread }) },
   { name: 'list_team', description: 'The people in the agency with their ids, roles and job titles. Use the ids to assign work.', schema: obj(),
     run: (db, ctx) => members.listMembers(db, ctx).map((m) => ({ id: m.id, username: m.username, displayName: m.displayName, role: m.role, isActive: m.isActive, jobTitle: m.jobTitle, department: m.department })) },
   { name: 'get_workload', description: 'Each active person\'s open tasks, overdue tasks and open estimated hours against weekly capacity.', schema: obj(),

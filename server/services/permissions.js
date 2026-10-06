@@ -66,6 +66,8 @@ const ACTIONS = {
   'followups.view': ALL,
   'followups.create': NOT_CONTRACTOR,
   'followups.manage': MANAGERS,
+  // Everyone has their own notifications.
+  'notifications.view': ALL,
   'ai.use': ALL,
   'ai.manage': OWNER_ADMIN,
   'ai.approve': OWNER_ADMIN,

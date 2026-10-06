@@ -17,6 +17,7 @@ const noterecords = require('../services/noterecords');
 const requests = require('../services/requests');
 const decisions = require('../services/decisions');
 const followups = require('../services/followups');
+const notifications = require('../services/notifications');
 const tasks = require('../services/tasks');
 const apikeys = require('../services/apikeys');
 const aiplans = require('../services/aiplans');
@@ -172,6 +173,11 @@ module.exports = function apiRouter(db, { google = null } = {}) {
   r.delete('/meeting-notes/:id', (req, res) => res.json(meetingnotes.deleteNote(db, ctxOf(req), idParam(req))));
   r.post('/meeting-notes/:id/records', (req, res) => res.json(noterecords.extractRecords(db, ctxOf(req), idParam(req), { kinds: req.body && req.body.kinds })));
   r.get('/meeting-notes/:id/records', (req, res) => res.json(noterecords.recordsOfNote(db, ctxOf(req), idParam(req))));
+  // ---- notifications (always the signed-in person's own) ----
+  r.get('/notifications', (req, res) => res.json(notifications.listNotifications(db, ctxOf(req), { unread: req.query.unread === '1', limit: req.query.limit })));
+  r.get('/notifications/count', (req, res) => res.json(notifications.unreadCount(db, ctxOf(req))));
+  r.post('/notifications/read-all', (req, res) => res.json(notifications.markAllRead(db, ctxOf(req))));
+  r.post('/notifications/:id/read', (req, res) => res.json(notifications.markRead(db, ctxOf(req), idParam(req))));
   // ---- client requests, decisions, follow-ups ----
   r.get('/requests', (req, res) => res.json(requests.listRequests(db, ctxOf(req), req.query)));
   r.post('/requests', (req, res) => res.json(requests.createRequest(db, ctxOf(req), req.body)));

@@ -9,6 +9,7 @@ const sops = require('./sops');
 const qarecords = require('./qarecords');
 const goals = require('./goals');
 const perms = require('./permissions');
+const notifications = require('./notifications');
 
 const STATUSES = ['todo', 'in_progress', 'review', 'changes', 'done'];
 const PRIORITIES = ['low', 'normal', 'high', 'urgent'];
@@ -150,6 +151,7 @@ function createTask(db, ctx, input = {}) {
     ).run(ctx.organizationId, next.projectId, next.title, next.description, next.status, next.priority, next.assigneeId, next.dueDate, next.estimateHours, ctx.actor.id, sop ? sop.id : null, sop ? sop.versionId : null, qaRequired ? 1 : 0, goalId).lastInsertRowid);
     logActivity(db, { ...logCtx(ctx), action: 'task.create', objectType: 'task', objectId: id, after: { title: next.title, projectId: next.projectId, assigneeId: next.assigneeId, ...(sop ? { sopId: sop.id } : {}) } });
     if (next.status === 'review') enterReview(db, ctx, id);
+    notifications.notify(db, ctx, { userIds: next.assigneeId, type: 'task_assigned', title: `Task assigned to you: ${next.title}`, link: `#/projects/${next.projectId}`, objectType: 'task', objectId: id, dedupeKey: `task_assigned:${id}` });
     return shape(db, ctx, find(db, ctx, id), today(db, ctx));
   })();
 }
@@ -199,6 +201,7 @@ function updateTask(db, ctx, id, patch = {}) {
         WHERE organization_id = ? AND id = ?`
     ).run(next.projectId, next.title, next.description, next.status, next.priority, next.assigneeId, next.dueDate, next.estimateHours, next.sopId, next.sopVersionId, next.qaRequired ? 1 : 0, next.goalId, ctx.organizationId, row.id);
     logActivity(db, { ...logCtx(ctx), action: 'task.update', objectType: 'task', objectId: row.id, before: d.before, after: d.after });
+    if (d.after.assigneeId) notifications.notify(db, ctx, { userIds: next.assigneeId, type: 'task_assigned', title: `Task assigned to you: ${next.title}`, link: `#/projects/${next.projectId}`, objectType: 'task', objectId: row.id, dedupeKey: `task_assigned:${row.id}` });
     if (d.after.status) {
       if (current.status === 'review') qarecords.withdrawPending(db, ctx.organizationId, row.id);
       if (next.status === 'review') enterReview(db, ctx, row.id);
@@ -232,6 +235,7 @@ function addComment(db, ctx, taskId, input = {}) {
     const body = cleanText(input.body, 'Comment', 1, 5000);
     const id = Number(db.prepare('INSERT INTO task_comments (organization_id, task_id, author_id, body) VALUES (?, ?, ?, ?)').run(ctx.organizationId, task.id, ctx.actor.id, body).lastInsertRowid);
     logActivity(db, { ...logCtx(ctx), action: 'task.comment', objectType: 'task', objectId: task.id, after: { commentId: id } });
+    notifications.notify(db, ctx, { userIds: task.assigneeId, type: 'task_comment', title: `New comment on ${task.title}`, body: body.slice(0, 200), link: `#/projects/${task.projectId}`, objectType: 'task', objectId: task.id, dedupeKey: `task_comment:${task.id}` });
     return commentShape(db.prepare('SELECT c.*, u.display_name AS authorName FROM task_comments c LEFT JOIN users u ON u.id = c.author_id WHERE c.id = ?').get(id));
   })();
 }

@@ -6,6 +6,7 @@ const { createApp } = require('./app');
 const auth = require('./services/auth');
 const oauth = require('./services/oauth');
 const googlesync = require('./services/googlesync');
+const notifications = require('./services/notifications');
 const { loadGoogle } = require('./google');
 const { createHub, loadOAuthApp } = require('./googlehub');
 
@@ -18,7 +19,13 @@ function housekeeping() {
   auth.pruneSessions(db);
   auth.pruneAttempts(db);
   oauth.prune(db);
+  notifications.prune(db);
 }
+
+// The daily digest: checked every half hour, sent once per person per day (the notification itself remembers).
+const digest = () => { try { notifications.runDigests(db); } catch (err) { console.error('Digest failed', err.message); } };
+setTimeout(digest, 60 * 1000).unref();
+setInterval(digest, 30 * 60 * 1000).unref();
 housekeeping();
 setInterval(housekeeping, 60 * 60 * 1000).unref();
 

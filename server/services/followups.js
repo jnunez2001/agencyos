@@ -8,6 +8,7 @@ const clients = require('./clients');
 const projects = require('./projects');
 const { today } = require('./dates');
 const perms = require('./permissions');
+const notifications = require('./notifications');
 
 const STATUSES = ['open', 'done', 'cancelled'];
 const FIELDS = ['title', 'details', 'dueDate', 'assigneeId', 'status', 'clientId', 'projectId'];
@@ -77,6 +78,7 @@ function createFollowUp(db, ctx, input = {}, { sourceNoteId = null } = {}) {
     const id = Number(db.prepare('INSERT INTO follow_ups (organization_id, client_id, project_id, title, details, due_date, assignee_id, source_note_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
       .run(ctx.organizationId, next.clientId, next.projectId, next.title, next.details, next.dueDate, next.assigneeId, sourceNoteId, ctx.actor.id).lastInsertRowid);
     logActivity(db, { ...logCtx(ctx), action: 'followup.create', objectType: 'follow_up', objectId: id, after: { title: next.title, assigneeId: next.assigneeId, dueDate: next.dueDate, ...(sourceNoteId ? { sourceNoteId } : {}) } });
+    notifications.notify(db, ctx, { userIds: next.assigneeId, type: 'followup_assigned', title: `Follow-up for you: ${next.title}`, link: '#/meetings/follow-ups', objectType: 'follow_up', objectId: id, dedupeKey: `followup_assigned:${id}` });
     return getFollowUp(db, ctx, id);
   })();
 }
@@ -105,6 +107,7 @@ function updateFollowUp(db, ctx, id, patch = {}) {
     db.prepare("UPDATE follow_ups SET title = ?, details = ?, due_date = ?, assignee_id = ?, status = ?, client_id = ?, project_id = ?, completed_at = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE organization_id = ? AND id = ?")
       .run(next.title, next.details, next.dueDate, next.assigneeId, next.status, next.clientId, next.projectId, next.status === 'done' ? (completing ? new Date().toISOString() : current.completedAt) : null, ctx.organizationId, current.id);
     logActivity(db, { ...logCtx(ctx), action: 'followup.update', objectType: 'follow_up', objectId: current.id, before: d.before, after: d.after });
+    if (d.after.assigneeId) notifications.notify(db, ctx, { userIds: next.assigneeId, type: 'followup_assigned', title: `Follow-up for you: ${next.title}`, link: '#/meetings/follow-ups', objectType: 'follow_up', objectId: current.id, dedupeKey: `followup_assigned:${current.id}` });
     return getFollowUp(db, ctx, id);
   })();
 }
