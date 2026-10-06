@@ -63,3 +63,12 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 - Goals belong to a client and are achieved or dropped, never deleted. Projects and tasks link to a goal of their own client, and a task inherits its project's goal. Progress is the share of linked tasks that are done.
 - Clients gain the blueprint statuses, an account owner and a start date. Migration 006 rebuilds the clients table, tested against data from the previous schema.
 - An AI can add and change goals and set client fields, but services stay with Owner and Admin. Spec: `docs/specs/2026-10-06-phase-5-goals-and-services.md`.
+
+## 2026-10-06: Phase 6 results and reports built
+
+- Results are recorded metrics per client (name, value, unit, date, optional goal). Staff record them. The client page shows each metric's latest value, change and trend.
+- Reports belong to a client and a period, with the blueprint's seven sections. "Generate from data" fills the factual sections as a snapshot (work completed, results, goals, risks, priorities). Narrative sections are for a person or an AI.
+- Only a person approves a report. Editing an approved report returns it to draft. Only drafts are deleted. Reports are copied as text or printed; sending to clients waits for the client portal.
+- An AI can record results and write or draft reports, reading the facts with `get_report_data`, but cannot approve.
+- Fixed a bug found by the new tests: a form sheet that navigates to a new page when it closes had the navigation undone by the step back that removes the sheet. Navigation after a sheet now waits for it (`goAfterSheets`). This also affected creating an SOP and starting work from an SOP.
+- Spec: `docs/specs/2026-10-06-phase-6-results-and-reports.md`.

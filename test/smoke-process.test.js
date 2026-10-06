@@ -73,7 +73,8 @@ test('the Owner can use SOPs and QA without an error or stray text', async () =>
   await app.wait(200);
   const used = app.calls.find((c) => c.method === 'POST' && c.path === '/sops/1/tasks');
   assert.deepEqual([used.body.mode, used.body.projectId], ['steps', 1]);
-  await app.wait(150);
+  await app.wait(200);
+  assert.equal(app.window.location.hash, '#/projects/1');
 
   // new SOP
   await app.go('#/sops');
@@ -88,7 +89,8 @@ test('the Owner can use SOPs and QA without an error or stray text', async () =>
   await app.wait(200);
   const created = app.calls.find((c) => c.method === 'POST' && c.path === '/sops');
   assert.deepEqual([created.body.title, created.body.steps, created.body.requiresQa, created.body.status], ['New one', ['One', 'Two'], true, 'draft']);
-  await app.wait(150);
+  await app.wait(200);
+  assert.equal(app.window.location.hash, '#/sops/3');
 
   // a task that follows an SOP
   await app.go('#/tasks');

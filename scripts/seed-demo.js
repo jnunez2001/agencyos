@@ -13,6 +13,8 @@ const tasks = require('../server/services/tasks');
 const sops = require('../server/services/sops');
 const services = require('../server/services/services');
 const goals = require('../server/services/goals');
+const results = require('../server/services/results');
+const reports = require('../server/services/reports');
 const { todayIn, addDays } = require('../server/services/dates');
 
 const PASSWORD = 'demo-password-123';
@@ -80,5 +82,17 @@ const PASSWORD = 'demo-password-123';
   T(seo, 'Monthly report template', { priority: 'low' });
   T(shop, 'Product list from client', { assigneeId: id('rayne'), dueDate: day(8), estimateHours: 2 });
   T(shop, 'Payment provider options', { assigneeId: id('mark'), dueDate: day(12), estimateHours: 5 });
+  // Recorded results and a generated report for last month.
+  const sarah = { organizationId: a.organizationId, actor: { id: id('sarah'), role: 'employee' }, ip: '127.0.0.1', source: 'system' };
+  const rec = (metric, value, unit, daysAgo, goalId) => results.recordResult(db, sarah, acme.id, { metric, value, unit, recordedOn: day(-daysAgo), goalId });
+  [[22, 4], [25, 3], [31, 2], [38, 1]].forEach(([v, n]) => rec('Organic leads', v + n * 3, 'leads', 30 * n - 4, gLeads.id));
+  [[2, 6], [8, 5], [10, 3], [12, 1]].forEach(([v, n]) => rec('Keywords in the top 10', v + n, '', 30 * n - 6));
+  rec('Google reviews', 41, 'reviews', 62);
+  rec('Google reviews', 47, 'reviews', 31);
+  rec('Google reviews', 58, 'reviews', 3);
+  const now = new Date(`${today}T00:00:00Z`);
+  const first = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 1, 1)).toISOString().slice(0, 10);
+  const last = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0)).toISOString().slice(0, 10);
+  reports.generateReport(db, owner, acme.id, { periodStart: first, periodEnd: last });
   console.log(`Demo agency ready in ${dir}. Sign in as josh, rayne, mark, sarah or cole. The demo password is in scripts/seed-demo.js.`);
 })();

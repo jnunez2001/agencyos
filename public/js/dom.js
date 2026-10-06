@@ -37,6 +37,7 @@ const ICONS = {
   sparkle: '<path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z"/><path d="M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"/>',
   qa: '<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/><path d="M9 12l2 2 4-4"/>',
   sops: '<path d="M5 4h10a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h10M9 8h5"/>',
+  reports: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h7M9 9h2"/>',
   key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/>',
 };
 
@@ -52,6 +53,20 @@ const openSheets = [];
 let hasEntry = false;
 let ignorePop = 0;
 let backTimer = null;
+let afterQueue = [];
+
+function flushAfter() {
+  const queue = afterQueue;
+  afterQueue = [];
+  queue.forEach((fn) => fn());
+}
+
+// Go to another page once the open sheets have finished closing. Changing the address while a sheet is still
+// closing would be undone by the step back that removes the sheet's history entry.
+export function goAfterSheets(hash) {
+  const go = () => { location.hash = hash; };
+  if (openSheets.length === 0 && !hasEntry && ignorePop === 0) go(); else afterQueue.push(go);
+}
 
 function addEntry() {
   if (hasEntry) return;
@@ -61,15 +76,16 @@ function addEntry() {
 function dropEntrySoon() {
   clearTimeout(backTimer);
   backTimer = setTimeout(() => {
-    if (openSheets.length === 0 && hasEntry) { hasEntry = false; ignorePop += 1; history.back(); }
+    if (openSheets.length === 0 && hasEntry) { hasEntry = false; ignorePop += 1; history.back(); } else if (openSheets.length === 0) flushAfter();
   }, 0);
 }
 
 window.addEventListener('popstate', () => {
-  if (ignorePop > 0) { ignorePop -= 1; return; }
+  if (ignorePop > 0) { ignorePop -= 1; if (ignorePop === 0) flushAfter(); return; }
   if (openSheets.length === 0) return;
   hasEntry = false;
   openSheets[openSheets.length - 1].close({ fromBack: true });
+  if (openSheets.length === 0) flushAfter();
   if (openSheets.length > 0) addEntry();
 });
 

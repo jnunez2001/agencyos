@@ -8,11 +8,11 @@ const { JSDOM } = require('jsdom');
 const PUBLIC = path.resolve(__dirname, '..', '..', 'public');
 
 const ROLES = ['owner', 'admin', 'manager', 'employee', 'contractor'];
-const WORK = { 'services.view': 1, 'sops.view': 1, 'sops.manage': 1, 'qa.review': 1, 'clients.view': 1, 'clients.manage': 1, 'projects.view': 1, 'projects.manage': 1, 'tasks.view': 1, 'tasks.manage': 1, 'tasks.work': 1, 'dashboard.agency': 1 };
+const WORK = { 'results.view': 1, 'results.record': 1, 'reports.view': 1, 'reports.manage': 1, 'reports.approve': 1, 'services.view': 1, 'sops.view': 1, 'sops.manage': 1, 'qa.review': 1, 'clients.view': 1, 'clients.manage': 1, 'projects.view': 1, 'projects.manage': 1, 'tasks.view': 1, 'tasks.manage': 1, 'tasks.work': 1, 'dashboard.agency': 1 };
 const CAN = {
   owner: { 'services.manage': 1, 'org.view': 1, 'org.update': 1, 'members.list': 1, 'members.create': 1, 'members.manage': 1, 'profile.edit_others': 1, 'profile.edit_self': 1, 'activity.view': 1, 'dashboard.team': 1, 'ai.use': 1, 'ai.manage': 1, 'ai.approve': 1, ...WORK },
   manager: { 'ai.use': 1, 'org.view': 1, 'members.list': 1, 'profile.edit_self': 1, 'dashboard.team': 1, ...WORK },
-  employee: { 'sops.view': 1, 'ai.use': 1, 'org.view': 1, 'members.list': 1, 'profile.edit_self': 1, 'clients.view': 1, 'projects.view': 1, 'tasks.view': 1, 'tasks.work': 1, 'dashboard.agency': 1 },
+  employee: { 'results.view': 1, 'results.record': 1, 'reports.view': 1, 'sops.view': 1, 'ai.use': 1, 'org.view': 1, 'members.list': 1, 'profile.edit_self': 1, 'clients.view': 1, 'projects.view': 1, 'tasks.view': 1, 'tasks.work': 1, 'dashboard.agency': 1 },
   contractor: { 'ai.use': 1, 'org.view': 1, 'profile.edit_self': 1, 'tasks.view': 1, 'tasks.work': 1 },
 };
 CAN.admin = CAN.owner;
@@ -25,6 +25,19 @@ const PEOPLE = [
 ];
 const NOW = new Date().toISOString();
 const GOAL = { id: 1, clientId: 1, title: 'Increase qualified organic leads', why: 'Quiet off season', target: '50 leads a month', dueDate: '2027-03-31', serviceId: 1, serviceName: 'SEO', status: 'active', createdAt: NOW, updatedAt: NOW, progress: { tasksTotal: 4, tasksDone: 1, projects: 1 } };
+const METRICS = [
+  { metric: 'Organic leads', unit: 'leads', count: 3, latest: { id: 3, value: 55, recordedOn: '2026-09-30' }, previous: { value: 40, recordedOn: '2026-08-31' }, change: 15, changePct: 37.5, history: [{ id: 1, recordedOn: '2026-07-31', value: 30 }, { id: 2, recordedOn: '2026-08-31', value: 40 }, { id: 3, recordedOn: '2026-09-30', value: 55 }] },
+  { metric: 'Top keywords', unit: '', count: 1, latest: { id: 4, value: 12, recordedOn: '2026-09-15' }, previous: null, change: null, changePct: null, history: [{ id: 4, recordedOn: '2026-09-15', value: 12 }] },
+];
+const RESULT_ROWS = [
+  { id: 3, clientId: 1, metric: 'Organic leads', value: 55, unit: 'leads', recordedOn: '2026-09-30', goalId: 1, goalTitle: 'Increase qualified organic leads', note: 'From Search Console', recordedById: 3, recordedByName: 'Mark Cruz' },
+  { id: 2, clientId: 1, metric: 'Organic leads', value: 40, unit: 'leads', recordedOn: '2026-08-31', goalId: null, goalTitle: null, note: '', recordedById: 2, recordedByName: 'Rayne' },
+];
+const SECTION_TEXT = { executiveSummary: 'A strong month for organic leads.', workCompleted: 'Local SEO\n- Claim profile (Sarah, Sep 10)', keyResults: '- Organic leads: 55 leads (up 15 from 40)', importantChanges: '', problemsRisks: 'Nothing is overdue.', nextPriorities: 'Due soon\n- Write service pages (due Oct 8, Mark)', recommendations: 'Keep publishing service pages.' };
+const REPORT_LIST = [
+  { id: 1, clientId: 1, clientName: 'Acme Dental', title: 'Acme Dental report, Sep 1, 2026 to Sep 30, 2026', periodStart: '2026-09-01', periodEnd: '2026-09-30', status: 'draft', createdByName: 'Josh Nunez', approvedByName: null, approvedAt: null, createdAt: NOW, updatedAt: NOW },
+  { id: 2, clientId: 1, clientName: 'Acme Dental', title: 'August report', periodStart: '2026-08-01', periodEnd: '2026-08-31', status: 'approved', createdByName: 'Josh Nunez', approvedByName: 'Mark Cruz', approvedAt: NOW, createdAt: NOW, updatedAt: NOW },
+];
 const SERVICES = [{ id: 1, name: 'SEO', isActive: true }, { id: 2, name: 'Web Development', isActive: true }];
 const clientRow = (id, name, status, openProjects) => ({ id, services: id === 1 ? [{ id: 1, name: 'SEO' }] : [], accountOwnerId: id === 1 ? 3 : null, accountOwnerName: id === 1 ? 'Mark Cruz' : null, startDate: id === 1 ? '2026-09-01' : null, name, status, website: id === 1 ? 'https://acme.example' : '', industry: id === 1 ? 'Dental' : '', notes: id === 1 ? 'Prefers email' : '', openProjects, createdAt: NOW, updatedAt: NOW });
 const CLIENTS = [clientRow(1, 'Acme Dental', 'active', 1), clientRow(2, 'Beta Bakery', 'paused', 0)];
@@ -75,6 +88,12 @@ function answers(role, { mustChange = false, empty = false } = {}) {
       { id: 2, summary: 'Set up Acme Dental', status: 'pending', error: null, keyName: 'Claude on my Mac', ownerName: 'Josh Nunez', createdAt: NOW, decidedAt: null, decidedByName: null, steps: 2, lines: ['Create client "Acme Dental"', 'Create project "New website" for "Acme Dental"'] },
       { id: 1, summary: 'Old plan', status: 'failed', error: 'Step 1 (create_client): A client with that name already exists', keyName: null, ownerName: 'Josh Nunez', createdAt: '2026-10-01T08:00:00.000Z', decidedAt: NOW, decidedByName: 'Josh Nunez', steps: 1, lines: ['Create client "Acme Dental"'] },
     ];
+    if (pathname === '/clients/1/metrics' && method === 'GET') return can['results.view'] ? METRICS : { __status: 403, error: 'Not allowed' };
+    if (pathname === '/clients/1/results' && method === 'GET') return RESULT_ROWS;
+    if (pathname === '/clients/1/reports/generate' && method === 'POST') return { ...REPORT_LIST[0], id: 3, sections: SECTION_TEXT };
+    if (pathname === '/reports' && method === 'GET') return can['reports.view'] ? REPORT_LIST : { __status: 403, error: 'Not allowed' };
+    if (pathname === '/reports' && method === 'POST') return { ...REPORT_LIST[0], id: 4, sections: SECTION_TEXT };
+    if (/^\/reports\/[12]$/.test(pathname) && method === 'GET') return { ...REPORT_LIST[Number(pathname.split('/')[2]) - 1], sections: SECTION_TEXT };
     if (pathname === '/services' && method === 'GET') return url.includes('all=1') ? [...SERVICES, { id: 3, name: 'Old service', isActive: false }] : SERVICES;
     if (pathname === '/services/defaults' && method === 'POST') return [...SERVICES];
     if (pathname === '/clients/1/goals' && method === 'GET') return [GOAL];

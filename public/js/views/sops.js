@@ -1,6 +1,6 @@
 // Joshua Nunez
 // SOPs: the list, an SOP page with its content and versions, and the forms.
-import { h, icon, openSheet } from '../dom.js';
+import { h, icon, openSheet, goAfterSheets } from '../dom.js';
 import { api } from '../api.js';
 import { field, selectField, textareaField, sheetForm, pill, formatWhen, SOP_STATUS_LABEL, PRIORITY_LABEL } from '../ui.js';
 
@@ -83,7 +83,7 @@ async function openUse(sop) {
     const due = field('Due date', { name: 'dueDate', type: 'date' });
     return sheetForm([project, mode, h('div', { class: 'two' }, assignee.el, priority.el), due], 'Create tasks', async () => {
       const made = await api('POST', `/sops/${sop.id}/tasks`, { projectId: Number(project.input.value), mode: mode.input.value, assigneeId: assignee.input.value === '' ? undefined : Number(assignee.input.value), priority: priority.input.value, dueDate: due.input.value || undefined });
-      location.hash = `#/projects/${project.input.value}`;
+      goAfterSheets(`#/projects/${project.input.value}`);
       return made;
     }, close);
   });
@@ -138,7 +138,7 @@ export async function sopsView(session, { param, rerender }) {
   const statuses = session.can['sops.manage'] ? STATUSES : ['approved', 'testing', 'deprecated'];
   return h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('h1', { class: 'page-title' }, 'SOPs'),
-      session.can['sops.manage'] && h('button', { class: 'btn btn-primary', type: 'button', onclick: () => openNewSop(session, async (made) => { location.hash = `#/sops/${made.id}`; }).catch((e) => alert(e.message)) }, icon('plus'), 'New SOP')),
+      session.can['sops.manage'] && h('button', { class: 'btn btn-primary', type: 'button', onclick: () => openNewSop(session, async (made) => goAfterSheets(`#/sops/${made.id}`)).catch((e) => alert(e.message)) }, icon('plus'), 'New SOP')),
     h('div', { class: 'chips' }, statuses.map((s) => chip(s, SOP_STATUS_LABEL[s])), chip('all', 'All')),
     box.el,
     list.length === 0

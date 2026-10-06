@@ -119,3 +119,29 @@ export function confirmButton(label, confirmLabel, action) {
 }
 
 export { openSheet };
+
+// A small trend line for a series of numbers (oldest first). Drawn as SVG from script, so no inline styles are needed.
+export function sparkline(values, { width = 120, height = 32 } = {}) {
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+  svg.setAttribute('class', 'spark');
+  svg.setAttribute('aria-hidden', 'true');
+  if (values.length < 2) return svg;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const pad = 3;
+  const points = values.map((v, i) => `${(pad + (i / (values.length - 1)) * (width - pad * 2)).toFixed(1)},${(height - pad - ((v - min) / span) * (height - pad * 2)).toFixed(1)}`).join(' ');
+  const line = document.createElementNS(NS, 'polyline');
+  line.setAttribute('points', points);
+  line.setAttribute('fill', 'none');
+  line.setAttribute('stroke', 'currentColor');
+  line.setAttribute('stroke-width', '2');
+  line.setAttribute('stroke-linecap', 'round');
+  line.setAttribute('stroke-linejoin', 'round');
+  svg.append(line);
+  return svg;
+}
+
+export const formatNumber = (n) => Number(n).toLocaleString('en-US', { maximumFractionDigits: 2 });

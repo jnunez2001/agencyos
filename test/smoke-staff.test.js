@@ -11,7 +11,7 @@ test('an Employee reads SOPs, follows them on their task, submits for QA, and ca
   await import('../public/js/app.js');
   await app.wait(250);
   const { document } = app;
-  assert.deepEqual([...document.querySelectorAll('.sidebar .nav-link')].map((a) => a.textContent.trim()), ['Dashboard', 'Tasks', 'Projects', 'Clients', 'SOPs', 'Team', 'AI agent']);
+  assert.deepEqual([...document.querySelectorAll('.sidebar .nav-link')].map((a) => a.textContent.trim()), ['Dashboard', 'Tasks', 'Projects', 'Clients', 'Reports', 'SOPs', 'Team', 'AI agent']);
   assert.doesNotMatch(app.main().textContent, /waiting for review/);
 
   await app.go('#/sops');
@@ -39,5 +39,27 @@ test('an Employee reads SOPs, follows them on their task, submits for QA, and ca
   buttonWith(sheet, 'Submit for QA').click();
   await app.wait(200);
   assert.ok(app.calls.some((c) => c.method === 'PATCH' && c.path === '/tasks/1' && c.body.status === 'review'));
+  // results are recorded by staff; reports are read only
+  await app.go('#/clients/1');
+  assert.ok(buttonWith(app.main(), 'Record result'));
+  assert.equal(buttonWith(app.main(), 'Generate from data'), undefined);
+  assert.equal(buttonWith(app.main(), 'New report'), undefined);
+  assert.match(app.main().textContent, /August report/);
+  assert.equal(strayText(document.body), null);
+  app.main().querySelector('.metric').click();
+  await app.wait(250);
+  const metricSheet = document.querySelector('.sheet');
+  const entryRows = [...metricSheet.querySelectorAll('.row')];
+  assert.deepEqual(entryRows.map((r) => r.tagName), ['BUTTON', 'DIV']); // only their own entry can be edited
+  metricSheet.querySelector('button[aria-label=Close]').click();
+  await app.wait(100);
+  await app.go('#/reports');
+  assert.equal(document.querySelector('.page-head .btn-primary'), null);
+  await app.go('#/reports/1');
+  assert.match(app.main().textContent, /Executive summary/);
+  for (const t of ['Edit', 'Approve', 'Delete draft']) assert.equal(buttonWith(app.main(), t), undefined, t);
+  assert.ok(buttonWith(app.main(), 'Copy as text'));
+  assert.equal(strayText(document.body), null);
+
   assert.deepEqual(app.errors, []);
 });

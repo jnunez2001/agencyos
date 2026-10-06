@@ -1,9 +1,10 @@
 // Joshua Nunez
 // Clients: the list, a client page with goals, contacts and projects, and the forms.
-import { h, icon, openSheet } from '../dom.js';
+import { h, icon, openSheet, goAfterSheets } from '../dom.js';
 import { api } from '../api.js';
-import { field, selectField, textareaField, sheetForm, confirmButton, pill, formatDay, CLIENT_STATUS_LABEL, GOAL_STATUS_LABEL } from '../ui.js';
+import { field, selectField, textareaField, sheetForm, confirmButton, pill, formatDay, formatNumber, sparkline, CLIENT_STATUS_LABEL, GOAL_STATUS_LABEL } from '../ui.js';
 import { projectPill, openProjectForm } from './projects.js';
+import { reportPill, openReportForm, openGenerate } from './reports.js';
 
 export const clientPill = (s) => pill('cs', s, CLIENT_STATUS_LABEL[s] || s);
 const goalPill = (s) => pill('gs', s, GOAL_STATUS_LABEL[s] || s);
@@ -72,6 +73,50 @@ function openContactForm(clientId, contact, onChanged) {
   });
 }
 
+// ---- results ----
+
+function openResultForm(session, clientId, goals, { result, metric, unit } = {}, metrics, onChanged) {
+  openSheet(result ? 'Edit result' : 'Record a result', (close) => {
+    const m = field('Metric', { name: 'metric', maxlength: 80, required: true, value: result ? result.metric : metric || '', placeholder: 'Organic leads', list: 'metric-names' });
+    const names = h('datalist', { id: 'metric-names' }, metrics.map((x) => h('option', { value: x.metric })));
+    const value = field('Value', { name: 'value', type: 'number', step: 'any', required: true, value: result ? result.value : '' });
+    const u = field('Unit', { name: 'unit', maxlength: 20, value: result ? result.unit : unit || '', placeholder: 'leads' });
+    const date = field('Date (today if empty)', { name: 'recordedOn', type: 'date', value: result ? result.recordedOn : '' });
+    const goal = selectField('Goal', [['', 'No goal'], ...goals.map((g) => [g.id, g.title])], result && result.goalId ? result.goalId : '', { name: 'goalId' });
+    const note = field('Note', { name: 'note', maxlength: 500, value: result ? result.note : '' });
+    const del = result ? confirmButton('Delete result', 'Click again to delete', async () => { await api('DELETE', `/results/${result.id}`); close(); await onChanged(); }) : null;
+    return sheetForm([m, names, h('div', { class: 'two' }, value.el, u.el), date, goals.length ? goal : null, note], result ? 'Save' : 'Record', async () => {
+      const body = { metric: m.input.value, value: value.input.value === '' ? null : Number(value.input.value), unit: u.input.value, goalId: goal.input.value === '' ? null : Number(goal.input.value), note: note.input.value };
+      if (date.input.value) body.recordedOn = date.input.value;
+      if (result) await api('PATCH', `/results/${result.id}`, body); else await api('POST', `/clients/${clientId}/results`, body);
+      await onChanged();
+    }, close, del);
+  });
+}
+
+async function openMetric(session, clientId, summary, goals, metrics, onChanged) {
+  const entries = await api('GET', `/clients/${clientId}/results?metric=${encodeURIComponent(summary.metric)}`);
+  openSheet(summary.metric, (close) => h('div', { class: 'sheet-body' },
+    h('div', { class: 'list-inner' }, entries.map((r) => {
+      const mayEdit = session.can['reports.manage'] || r.recordedById === session.user.id;
+      return h(mayEdit ? 'button' : 'div', { class: `row${mayEdit ? '' : ' static'}`, type: mayEdit ? 'button' : null, onclick: mayEdit ? () => { close(); openResultForm(session, clientId, goals, { result: r }, metrics, onChanged); } : null },
+        h('div', { class: 'grow' }, h('div', { class: 'row-title' }, `${formatNumber(r.value)}${r.unit ? ` ${r.unit}` : ''}`), h('div', { class: 'row-sub' }, [formatDay(r.recordedOn), r.recordedByName, r.goalTitle ? `Goal: ${r.goalTitle}` : null, r.note].filter(Boolean).join(' · '))),
+        mayEdit && icon('chevron'));
+    })),
+    h('div', { class: 'sheet-actions' },
+      h('button', { class: 'btn', type: 'button', onclick: () => close() }, 'Close'),
+      h('button', { class: 'btn btn-primary', type: 'button', onclick: () => { close(); openResultForm(session, clientId, goals, { metric: summary.metric, unit: summary.unit }, metrics, onChanged); } }, 'Record new value'))));
+}
+
+function metricCard(session, clientId, m, goals, metrics, rerender) {
+  const change = m.change === null ? 'First reading' : `${m.change > 0 ? 'Up' : m.change < 0 ? 'Down' : 'No change'}${m.change !== 0 ? ` ${formatNumber(Math.abs(m.change))}${m.changePct === null ? '' : ` (${formatNumber(Math.abs(m.changePct))}%)`}` : ''} since ${formatDay(m.previous.recordedOn)}`;
+  return h('button', { class: 'metric', type: 'button', onclick: () => openMetric(session, clientId, m, goals, metrics, rerender).catch((e) => alert(e.message)) },
+    h('span', { class: 'label' }, m.metric),
+    h('span', { class: 'metric-value' }, `${formatNumber(m.latest.value)}${m.unit ? ` ${m.unit}` : ''}`),
+    h('span', { class: `muted metric-change${m.change > 0 ? ' up' : m.change < 0 ? ' down' : ''}` }, change),
+    sparkline(m.history.map((x) => x.value)));
+}
+
 // A goal with its progress: how much of the work that supports it is done.
 function goalCard(session, clientId, g, rerender) {
   const manage = session.can['clients.manage'];
@@ -87,7 +132,11 @@ function goalCard(session, clientId, g, rerender) {
 }
 
 async function clientPage(session, id, rerender) {
-  const c = await api('GET', `/clients/${id}`);
+  const [c, metrics, reports] = await Promise.all([
+    api('GET', `/clients/${id}`),
+    session.can['results.view'] ? api('GET', `/clients/${id}/metrics`) : [],
+    session.can['reports.view'] ? api('GET', `/reports?clientId=${id}`) : [],
+  ]);
   const manage = session.can['clients.manage'];
   const facts = h('dl', { class: 'facts' },
     h('dt', {}, 'Industry'), h('dd', {}, c.industry || 'Not set'),
@@ -109,6 +158,14 @@ async function clientPage(session, id, rerender) {
         h('section', { class: 'panel' },
           h('div', { class: 'panel-head' }, h('h2', {}, 'Goals'), manage && h('button', { class: 'btn-text', type: 'button', onclick: () => openGoalForm(session, c.id, null, rerender).catch((e) => alert(e.message)) }, 'Add goal')),
           c.goals.length ? h('div', { class: 'goals' }, c.goals.map((g) => goalCard(session, c.id, g, rerender))) : h('p', { class: 'muted' }, 'No goals yet.')),
+        session.can['results.view'] && h('section', { class: 'panel' },
+          h('div', { class: 'panel-head' }, h('h2', {}, 'Results'), session.can['results.record'] && h('button', { class: 'btn-text', type: 'button', onclick: () => openResultForm(session, c.id, c.goals, {}, metrics, rerender) }, 'Record result')),
+          metrics.length ? h('div', { class: 'metrics' }, metrics.map((m) => metricCard(session, c.id, m, c.goals, metrics, rerender))) : h('p', { class: 'muted' }, 'No results recorded yet.')),
+        session.can['reports.view'] && h('section', { class: 'panel' },
+          h('div', { class: 'panel-head' }, h('h2', {}, 'Reports'), session.can['reports.manage'] && h('div', { class: 'foot-actions' },
+            h('button', { class: 'btn-text', type: 'button', onclick: () => openGenerate(c.id, c.name, (r) => goAfterSheets(`#/reports/${r.id}`)) }, 'Generate from data'),
+            h('button', { class: 'btn-text', type: 'button', onclick: () => openReportForm(null, { clientId: c.id, clients: [{ id: c.id, name: c.name }] }, (r) => goAfterSheets(`#/reports/${r.id}`)) }, 'New report'))),
+          reports.length ? h('div', { class: 'list-inner' }, reports.map((r) => h('a', { class: 'row', href: `#/reports/${r.id}` }, h('div', { class: 'grow' }, h('div', { class: 'row-title' }, r.title), h('div', { class: 'row-sub' }, `${formatDay(r.periodStart)} to ${formatDay(r.periodEnd)}`)), reportPill(r.status), icon('chevron')))) : h('p', { class: 'muted' }, 'No reports yet.')),
         h('section', { class: 'panel' },
           h('div', { class: 'panel-head' }, h('h2', {}, 'Contacts'), manage && h('button', { class: 'btn-text', type: 'button', onclick: () => openContactForm(c.id, null, rerender) }, 'Add contact')),
           c.contacts.length ? h('div', { class: 'list-inner' }, c.contacts.map(contactRow)) : h('p', { class: 'muted' }, 'No contacts yet.')),

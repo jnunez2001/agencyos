@@ -13,6 +13,7 @@ import { aiView } from './views/ai.js';
 import { connectView } from './views/connect.js';
 import { sopsView } from './views/sops.js';
 import { qaView } from './views/qa.js';
+import { reportsView } from './views/reports.js';
 import { tasksView } from './views/tasks.js';
 import { projectsView } from './views/projects.js';
 import { clientsView } from './views/clients.js';
@@ -21,7 +22,7 @@ import { visibleNav, bottomNav } from './nav.js';
 const root = document.getElementById('app');
 let session = null;
 
-const VIEWS = { dashboard: dashboardView, tasks: tasksView, projects: projectsView, clients: clientsView, ai: aiView, connect: connectView, sops: sopsView, qa: qaView, team: teamView, activity: activityView, settings: settingsView, profile: profileView };
+const VIEWS = { dashboard: dashboardView, tasks: tasksView, projects: projectsView, clients: clientsView, ai: aiView, connect: connectView, sops: sopsView, qa: qaView, reports: reportsView, team: teamView, activity: activityView, settings: settingsView, profile: profileView };
 
 function currentTheme() { return document.documentElement.getAttribute('data-theme') || 'light'; }
 function toggleTheme() {
