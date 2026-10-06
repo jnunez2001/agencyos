@@ -15,8 +15,10 @@ const ACCESS_TTL = 60 * MINUTE;
 const REFRESH_TTL = 30 * 24 * 60 * MINUTE;
 const MAX_CLIENTS = 1000;
 
-// Where Claude's apps send people back to. Nothing else may register.
-const CLAUDE_CALLBACKS = ['https://claude.ai/api/mcp/auth_callback', 'https://claude.com/api/mcp/auth_callback'];
+// Where the AI apps send people back to. Nothing else may register. Claude has two fixed addresses. ChatGPT has a
+// stable one and one with an id that ChatGPT shows on its connector page.
+const CLAUDE_CALLBACKS = ['https://claude.ai/api/mcp/auth_callback', 'https://claude.com/api/mcp/auth_callback', 'https://chatgpt.com/connector_platform_oauth_redirect'];
+const CHATGPT_CALLBACK = /^https:\/\/chatgpt\.com\/connector\/oauth\/[A-Za-z0-9_-]{1,100}$/;
 const LOOPBACK_HOSTS = ['localhost', '127.0.0.1'];
 
 // An OAuth error: sent to the app as { error, error_description }. `redirectTo` is set when it should go back to
@@ -41,7 +43,7 @@ const isLoopback = (u) => u && u.protocol === 'http:' && LOOPBACK_HOSTS.includes
 
 function redirectAllowed(value) {
   if (typeof value !== 'string' || value.length > 300) return false;
-  if (CLAUDE_CALLBACKS.includes(value)) return true;
+  if (CLAUDE_CALLBACKS.includes(value) || CHATGPT_CALLBACK.test(value)) return true;
   return isLoopback(parseUrl(value));
 }
 
@@ -75,9 +77,10 @@ const findClient = (db, clientId) => {
 
 // ---- authorization ----
 
-function errorRedirect(redirectUri, state, error, description) {
+function errorRedirect(redirectUri, state, error, description, issuer) {
   const u = new URL(redirectUri);
   u.searchParams.set('error', error);
+  if (issuer) u.searchParams.set('iss', issuer);
   u.searchParams.set('error_description', description);
   if (state) u.searchParams.set('state', state);
   return u.toString();
@@ -85,15 +88,16 @@ function errorRedirect(redirectUri, state, error, description) {
 
 // Checks an authorization request and stores it until a person approves. Returns the id of the stored request.
 // A bad client or redirect address is never redirected (that would send the person to an attacker's page).
-function startAuthorization(db, q, resourceUrl) {
+function startAuthorization(db, q, { resourceUrls, issuer }) {
   const client = findClient(db, q.client_id);
   if (!client) throw new OAuthError('invalid_client', 'Unknown app');
   if (typeof q.redirect_uri !== 'string' || !redirectMatches(client.redirectUris, q.redirect_uri)) throw new OAuthError('invalid_request', 'That redirect address is not registered for this app');
   const state = typeof q.state === 'string' ? q.state.slice(0, 500) : '';
-  const bad = (error, description) => new OAuthError(error, description, { redirectTo: errorRedirect(q.redirect_uri, state, error, description) });
+  const bad = (error, description) => new OAuthError(error, description, { redirectTo: errorRedirect(q.redirect_uri, state, error, description, issuer) });
   if (q.response_type !== 'code') throw bad('unsupported_response_type', 'Only response_type=code is supported');
   if (typeof q.code_challenge !== 'string' || !/^[A-Za-z0-9_-]{43,128}$/.test(q.code_challenge) || q.code_challenge_method !== 'S256') throw bad('invalid_request', 'PKCE with code_challenge_method=S256 is required');
-  if (q.resource !== undefined && String(q.resource).replace(/\/+$/, '') !== resourceUrl) throw bad('invalid_target', 'Unknown resource');
+  // Claude sends the address of the /mcp endpoint; ChatGPT sends the site's address. Both name this server.
+  if (q.resource !== undefined && !resourceUrls.includes(String(q.resource).replace(/\/+$/, ''))) throw bad('invalid_target', 'Unknown resource');
   const id = random(24);
   db.prepare('INSERT INTO oauth_requests (id, client_id, redirect_uri, code_challenge, state, expires_at) VALUES (?, ?, ?, ?, ?, ?)').run(id, client.clientId, q.redirect_uri, q.code_challenge, state, iso(Date.now() + REQUEST_TTL));
   return id;
@@ -114,12 +118,12 @@ function getRequest(db, ctx, id) {
 }
 
 // Approving or cancelling. Returns the address to send the browser to.
-function decideRequest(db, ctx, id, { approve, access }) {
+function decideRequest(db, ctx, id, { approve, access, issuer }) {
   need(ctx);
   const r = findRequest(db, id);
   if (!approve) {
     db.prepare('DELETE FROM oauth_requests WHERE id = ?').run(r.id);
-    return { redirectUrl: errorRedirect(r.redirect_uri, r.state, 'access_denied', 'The person cancelled') };
+    return { redirectUrl: errorRedirect(r.redirect_uri, r.state, 'access_denied', 'The person cancelled', issuer) };
   }
   if (!ACCESS.includes(access)) throw new ServiceError(400, 'Choose an access level');
   const code = `aoc_${random(32)}`;
@@ -131,6 +135,7 @@ function decideRequest(db, ctx, id, { approve, access }) {
   const u = new URL(r.redirect_uri);
   u.searchParams.set('code', code);
   if (r.state) u.searchParams.set('state', r.state);
+  if (issuer) u.searchParams.set('iss', issuer); // so the app can tell which server answered (RFC 9207)
   return { redirectUrl: u.toString() };
 }
 

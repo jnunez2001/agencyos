@@ -22,7 +22,7 @@ function limiter(max, windowMs = 60 * 1000) {
 
 function oauthRouter(db) {
   const r = express.Router();
-  const registerLimit = limiter(20);
+  const registerLimit = limiter(60);
   const tokenLimit = limiter(60);
   r.use((req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 
@@ -42,6 +42,7 @@ function oauthRouter(db) {
       code_challenge_methods_supported: ['S256'],
       token_endpoint_auth_methods_supported: ['none'],
       scopes_supported: ['mcp'],
+      authorization_response_iss_parameter_supported: true,
     });
   });
 
@@ -57,7 +58,7 @@ function oauthRouter(db) {
 
   r.get('/oauth/authorize', (req, res) => {
     try {
-      const id = oauth.startAuthorization(db, req.query, `${originOf(req)}/mcp`);
+      const id = oauth.startAuthorization(db, req.query, { resourceUrls: [originOf(req), `${originOf(req)}/mcp`], issuer: originOf(req) });
       res.redirect(302, `/#/connect/${id}`);
     } catch (err) {
       if (err instanceof oauth.OAuthError && err.redirectTo) return res.redirect(302, err.redirectTo);

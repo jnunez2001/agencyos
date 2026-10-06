@@ -19,6 +19,8 @@ const { originOf } = require('./oauthRoutes');
 
 const VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const RATE = { windowMs: 60 * 1000, max: 120 };
+// ChatGPT reads this to know a tool needs the OAuth sign-in. Other clients ignore it.
+const SECURITY = [{ type: 'oauth2', scopes: ['mcp'] }];
 
 const obj = (properties = {}, required = []) => ({ type: 'object', properties, required, additionalProperties: false });
 const str = (description) => ({ type: 'string', description });
@@ -98,7 +100,7 @@ function handleMessage(db, auth, msg) {
       return reply(msg.id, { protocolVersion: VERSIONS.includes(wanted) ? wanted : VERSIONS[0], capabilities: { tools: {} }, serverInfo: { name: 'agencyos', version: '1.0.0' } });
     }
     case 'ping': return reply(msg.id, {});
-    case 'tools/list': return reply(msg.id, { tools: toolsFor(auth).map((t) => ({ name: t.name, description: t.description, inputSchema: t.schema })) });
+    case 'tools/list': return reply(msg.id, { tools: toolsFor(auth).map((t) => ({ name: t.name, description: t.description, inputSchema: t.schema, securitySchemes: SECURITY, _meta: { securitySchemes: SECURITY } })) });
     case 'tools/call': {
       const params = msg.params || {};
       try {
@@ -120,7 +122,7 @@ function mcpHandler(db) {
     const header = req.get('authorization') || '';
     const auth = apikeys.authenticate(db, header.startsWith('Bearer ') ? header.slice(7).trim() : '');
     // The pointer tells an OAuth client (such as claude.ai) where to find the sign-in.
-    if (!auth) return res.status(401).set('WWW-Authenticate', `Bearer resource_metadata="${originOf(req)}/.well-known/oauth-protected-resource"`).json({ error: 'A valid API key or access token is required' });
+    if (!auth) return res.status(401).set('WWW-Authenticate', `Bearer resource_metadata="${originOf(req)}/.well-known/oauth-protected-resource", scope="mcp"`).json({ error: 'A valid API key or access token is required' });
     const now = Date.now();
     const h = hits.get(auth.keyId);
     if (!h || now - h.start >= RATE.windowMs) hits.set(auth.keyId, { start: now, count: 1 });

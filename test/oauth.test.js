@@ -45,7 +45,7 @@ test('a call without a token is answered with a pointer to the discovery documen
   const o = oauth(app);
   const res = await o.mcpCall('aos_' + 'x'.repeat(32));
   assert.equal(res.status, 401);
-  assert.equal(res.headers.get('www-authenticate'), `Bearer resource_metadata="${o.origin}/.well-known/oauth-protected-resource"`);
+  assert.equal(res.headers.get('www-authenticate'), `Bearer resource_metadata="${o.origin}/.well-known/oauth-protected-resource", scope="mcp"`);
   const none = await fetch(`${o.origin}/mcp`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
   assert.equal(none.status, 401);
   assert.match(none.headers.get('www-authenticate'), /resource_metadata=/);
@@ -68,6 +68,7 @@ test('discovery documents describe the resource and the authorization server', a
   assert.deepEqual(as.code_challenge_methods_supported, ['S256']);
   assert.ok(as.token_endpoint_auth_methods_supported.includes('none'));
   assert.deepEqual(as.response_types_supported, ['code']);
+  assert.equal(as.authorization_response_iss_parameter_supported, true);
   assert.ok(as.grant_types_supported.includes('authorization_code') && as.grant_types_supported.includes('refresh_token'));
   await app.close();
 });
@@ -83,6 +84,14 @@ test('registration accepts only Claude redirect addresses', async () => {
   assert.equal((await o.register({ redirect_uris: ['https://claude.com/api/mcp/auth_callback'] })).status, 201);
   assert.equal((await o.register({ redirect_uris: ['http://localhost:3118/callback'] })).status, 201);
   assert.equal((await o.register({ redirect_uris: ['http://127.0.0.1:5555/callback'] })).status, 201);
+  // ChatGPT: its stable address and the one with a callback id
+  assert.equal((await o.register({ redirect_uris: ['https://chatgpt.com/connector_platform_oauth_redirect'] })).status, 201);
+  assert.equal((await o.register({ redirect_uris: ['https://chatgpt.com/connector/oauth/AbC_123-xyz'] })).status, 201);
+  for (const bad of [['https://chatgpt.com.evil.example/connector/oauth/abc'], ['http://chatgpt.com/connector/oauth/abc'], ['https://chatgpt.com/connector/oauth/'], ['https://chatgpt.com/connector/oauth/a/b'], ['https://chatgpt.com/other'], ['https://evilchatgpt.com/connector_platform_oauth_redirect']]) {
+    const r = await o.register({ redirect_uris: bad });
+    assert.equal(r.status, 400, JSON.stringify(bad));
+    assert.equal(r.data.error, 'invalid_redirect_uri');
+  }
   for (const bad of [['https://evil.example/cb'], ['https://claude.ai.evil.example/api/mcp/auth_callback'], ['http://claude.ai/api/mcp/auth_callback'], ['https://claude.ai/other'], [CLAUDE_CALLBACK, 'https://evil.example/cb'], [], 'x', undefined, ['http://localhost.evil.example/cb']]) {
     const r = await o.register({ client_name: 'x', redirect_uris: bad });
     assert.equal(r.status, 400, JSON.stringify(bad));
@@ -169,6 +178,8 @@ test('authorize refuses bad requests', async () => {
   }
   assert.equal((await o.authorize(o.authorizeUrl(client, p, { resource: `${o.origin}/mcp` }))).status, 302);
   assert.equal((await o.authorize(o.authorizeUrl(client, p, { resource: `${o.origin}/mcp/` }))).status, 302);
+  assert.equal((await o.authorize(o.authorizeUrl(client, p, { resource: o.origin }))).status, 302); // ChatGPT names the site
+  assert.equal((await o.authorize(o.authorizeUrl(client, p, { resource: `${o.origin}/other` }))).headers.get('location').includes('error=invalid_target'), true);
   await app.close();
 });
 
@@ -295,5 +306,29 @@ test('a person who is deactivated loses the connection', async () => {
   assert.equal((await o.mcpCall(t.access_token)).status, 200);
   assert.equal((await app.owner.call('PATCH', '/members/2', { isActive: false })).status, 200);
   assert.equal((await o.mcpCall(t.access_token)).status, 401);
+  await app.close();
+});
+
+test('ChatGPT can sign in: its callback registers, and every answer carries the issuer', async () => {
+  const app = await setUp();
+  const o = oauth(app);
+  const callback = 'https://chatgpt.com/connector/oauth/abc123';
+  const client = (await o.register({ client_name: 'ChatGPT', redirect_uris: [callback], token_endpoint_auth_method: 'none' })).data;
+  const p = o.pkce();
+  const c = await o.connect(client, p);
+  assert.equal(c.redirect.origin + c.redirect.pathname, callback);
+  assert.equal(c.redirect.searchParams.get('iss'), o.origin);
+  const t = await o.exchange(client, c.code, p);
+  assert.equal(t.status, 200);
+  assert.equal((await o.mcpCall(t.data.access_token)).status, 200);
+  const tools = (await o.mcpCall(t.data.access_token, 'tools/list')).data.result.tools;
+  assert.ok(tools.every((x) => x.securitySchemes[0].type === 'oauth2' && x._meta.securitySchemes[0].scopes[0] === 'mcp'));
+  // a cancelled sign-in and a refused request also name the issuer
+  const res = await o.authorize(o.authorizeUrl(client, p));
+  const id = new URL(res.headers.get('location'), o.origin).hash.replace('#/connect/', '');
+  const denied = new URL((await app.owner.call('POST', `/oauth/requests/${id}/deny`, {})).data.redirectUrl);
+  assert.deepEqual([denied.searchParams.get('error'), denied.searchParams.get('iss')], ['access_denied', o.origin]);
+  const bad = await o.authorize(o.authorizeUrl(client, p, { code_challenge_method: 'plain' }));
+  assert.equal(new URL(bad.headers.get('location')).searchParams.get('iss'), o.origin);
   await app.close();
 });

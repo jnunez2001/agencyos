@@ -15,6 +15,7 @@ const tasks = require('../services/tasks');
 const apikeys = require('../services/apikeys');
 const aiplans = require('../services/aiplans');
 const oauth = require('../services/oauth');
+const { originOf } = require('../oauthRoutes');
 const sops = require('../services/sops');
 const qa = require('../services/qa');
 const services = require('../services/services');
@@ -154,8 +155,8 @@ module.exports = function apiRouter(db, { google = null } = {}) {
 
   // Approving a sign-in from an AI app such as claude.ai (the app sent the person here from /oauth/authorize).
   r.get('/oauth/requests/:id', (req, res) => res.json(oauth.getRequest(db, ctxOf(req), req.params.id)));
-  r.post('/oauth/requests/:id/approve', (req, res) => res.json(oauth.decideRequest(db, ctxOf(req), req.params.id, { approve: true, access: req.body.access })));
-  r.post('/oauth/requests/:id/deny', (req, res) => res.json(oauth.decideRequest(db, ctxOf(req), req.params.id, { approve: false })));
+  r.post('/oauth/requests/:id/approve', (req, res) => res.json(oauth.decideRequest(db, ctxOf(req), req.params.id, { approve: true, access: req.body.access, issuer: originOf(req) })));
+  r.post('/oauth/requests/:id/deny', (req, res) => res.json(oauth.decideRequest(db, ctxOf(req), req.params.id, { approve: false, issuer: originOf(req) })));
 
   r.get('/dashboard', (req, res) => res.json(dashboard.getDashboard(db, ctxOf(req))));
 

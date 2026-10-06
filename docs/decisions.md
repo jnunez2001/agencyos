@@ -72,3 +72,9 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 - An AI can record results and write or draft reports, reading the facts with `get_report_data`, but cannot approve.
 - Fixed a bug found by the new tests: a form sheet that navigates to a new page when it closes had the navigation undone by the step back that removes the sheet. Navigation after a sheet now waits for it (`goAfterSheets`). This also affected creating an SOP and starting work from an SOP.
 - Spec: `docs/specs/2026-10-06-phase-6-results-and-reports.md`.
+
+## 2026-10-06: Phase 7 Google data, and ChatGPT sign-in
+
+- Google Search Console and Analytics (GA4) numbers are pulled with a Google service account (a read-only robot identity), not "Sign in with Google", so access never expires. Monthly numbers for completed months are recorded as results with a source, first 12 months on connect and the last 2 months refreshed daily. The key is a root-only file on the server, installed with `deploy/set-google-key.sh`. Spec: `docs/specs/2026-10-06-phase-7-google-data.md`.
+- Synced results cannot be edited by hand; hand-typed results are never touched.
+- ChatGPT can connect as a custom MCP server: its two redirect addresses are accepted, the sign-in answers carry the issuer (RFC 9207), the resource may name the site or the /mcp address, and tools declare their OAuth scheme. Found from OpenAI's documentation after a "settings were rejected" error.
