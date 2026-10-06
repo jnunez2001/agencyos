@@ -116,3 +116,10 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 
 - Structured notes (summary, agenda, discussion, decisions, requests, follow-ups) kept as plain text sections; steps 3 to 6 will turn decisions, requests and follow-ups into real records. Spec: `docs/specs/2026-10-06-phase-10-meeting-notes.md`.
 - One note per event, linked both ways. Attendees write a draft; only a manager finalizes, reopens or deletes. AI can draft and edit drafts but never finalizes.
+
+## 2026-10-06: Meeting records (roadmap steps 3 to 6)
+
+- Client requests, decisions and follow-ups are first-class records, built with the meeting-to-records step because that step needs them. Spec: `docs/specs/2026-10-06-phase-11-meeting-records.md`.
+- "Create records" on a note turns each line of its Decisions, Requests and Follow-ups into a record linked to the note, skips lines already made, and needs a client on the note for requests.
+- Convert to Task is a manager action; the request keeps the task link and shows its status. AI can add and edit records and run Create records through plans, but can never approve, reject, start or convert a request, and never deletes.
+- Follow-ups with a due date show on the calendar. Decisions and Follow-ups are tabs of the Meetings screen; Requests has its own menu item.

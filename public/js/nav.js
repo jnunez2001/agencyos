@@ -4,6 +4,7 @@ export const NAV = [
   { key: 'dashboard', label: 'Dashboard', icon: 'dashboard', show: () => true },
   { key: 'calendar', label: 'Calendar', icon: 'calendar', show: (s) => s.can['events.view'] },
   { key: 'meetings', label: 'Meetings', icon: 'notes', show: (s) => s.can['notes.view'] },
+  { key: 'requests', label: 'Requests', icon: 'inbox', show: (s) => s.can['requests.view'] },
   { key: 'tasks', label: 'Tasks', icon: 'tasks', show: (s) => s.can['tasks.view'] },
   { key: 'qa', label: 'QA', icon: 'qa', show: (s) => s.can['qa.review'] },
   { key: 'projects', label: 'Projects', icon: 'projects', show: (s) => s.can['projects.view'] },

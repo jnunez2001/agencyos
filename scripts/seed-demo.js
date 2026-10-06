@@ -17,6 +17,7 @@ const results = require('../server/services/results');
 const reports = require('../server/services/reports');
 const events = require('../server/services/events');
 const meetingnotes = require('../server/services/meetingnotes');
+const noterecords = require('../server/services/noterecords');
 const { todayIn, addDays } = require('../server/services/dates');
 
 const PASSWORD = 'demo-password-123';
@@ -87,7 +88,8 @@ const PASSWORD = 'demo-password-123';
   // The calendar: a client meeting, a team meeting, a review, an all-day training and blocked time.
   const at = (offset, hhmm) => `${day(offset)}T${hhmm}:00Z`;
   const checkin = events.createEvent(db, owner, { title: 'Acme monthly check-in', type: 'client_meeting', startsAt: at(1, '14:00'), endsAt: at(1, '15:00'), clientId: acme.id, location: 'Zoom', attendees: [id('mark'), id('sarah')] });
-  meetingnotes.createNote(db, owner, { eventId: checkin.id, summary: 'Leads are up. Client wants a faster booking form.', agenda: 'Results\nBooking form\nNext month', discussion: 'Reviewed the lead numbers. The booking form is the main drop-off point.', decisions: 'Rebuild the booking form first', requests: 'Add online booking for hygiene visits', followUps: 'Mark sends a wireframe by Friday' });
+  const checkinNote = meetingnotes.createNote(db, owner, { eventId: checkin.id, summary: 'Leads are up. Client wants a faster booking form.', agenda: 'Results\nBooking form\nNext month', discussion: 'Reviewed the lead numbers. The booking form is the main drop-off point.', decisions: 'Rebuild the booking form first', requests: 'Add online booking for hygiene visits', followUps: 'Mark sends a wireframe by Friday' });
+  noterecords.extractRecords(db, owner, checkinNote.id);
   events.createEvent(db, owner, { title: 'Team sync', type: 'team_meeting', startsAt: at(2, '09:00'), endsAt: at(2, '09:30'), attendees: [id('rayne'), id('mark'), id('sarah')] });
   events.createEvent(db, owner, { title: 'Citation clean-up review', type: 'review', startsAt: at(5, '16:00'), endsAt: at(5, '16:45'), attendees: [id('mark')] });
   events.createEvent(db, owner, { title: 'SEO training day', type: 'training', allDay: true, startsAt: day(8), endsAt: day(9), attendees: [id('sarah')] });

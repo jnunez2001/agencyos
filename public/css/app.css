@@ -392,3 +392,13 @@ a.btn { text-decoration: none; }
   .cal-row { grid-template-columns: 78px 1fr; }
 }
 [hidden] { display: none !important; }
+.pill.rs-new, .pill.rs-reviewing { background: var(--accent-soft); color: var(--accent); }
+.pill.rs-approved, .pill.rs-completed, .pill.fs-done, .pill.ds-active { background: #dcfce7; color: #166534; }
+.pill.rs-in_progress, .pill.rs-waiting { background: #fef3c7; color: #92400e; }
+.pill.rs-rejected, .pill.fs-cancelled, .pill.ds-reversed { background: #fee2e2; color: #b91c1c; }
+:root[data-theme="dark"] .pill.rs-approved, :root[data-theme="dark"] .pill.rs-completed, :root[data-theme="dark"] .pill.fs-done, :root[data-theme="dark"] .pill.ds-active { background: #10321d; color: #86efac; }
+:root[data-theme="dark"] .pill.rs-in_progress, :root[data-theme="dark"] .pill.rs-waiting { background: #3a2a0c; color: #fcd34d; }
+:root[data-theme="dark"] .pill.rs-rejected, :root[data-theme="dark"] .pill.fs-cancelled, :root[data-theme="dark"] .pill.ds-reversed { background: #3b1414; color: #fca5a5; }
+.tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+.note-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+a.chip { display: inline-flex; align-items: center; text-decoration: none; color: inherit; }
