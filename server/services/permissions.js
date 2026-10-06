@@ -66,6 +66,11 @@ const ACTIONS = {
   'followups.view': ALL,
   'followups.create': NOT_CONTRACTOR,
   'followups.manage': MANAGERS,
+  // SOP change requests. Anyone may see and raise them (a Contractor only on an SOP of their own task and sees only their own);
+  // Managers review, approve, reject and publish. The service enforces the narrower rules.
+  'sopchanges.view': ALL,
+  'sopchanges.create': ALL,
+  'sopchanges.manage': MANAGERS,
   'ai.use': ALL,
   'ai.manage': OWNER_ADMIN,
   'ai.approve': OWNER_ADMIN,

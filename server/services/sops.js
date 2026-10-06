@@ -178,4 +178,4 @@ function pinned(db, organizationId, sopId, versionId) {
   return { id: sop.id, title: sop.title, status: sop.status, version: label(v), latestVersion: label(sop), isLatest: v.id === sop.versionId, content: contentOf(v) };
 }
 
-module.exports = { STATUSES, MAX_STEPS, listSops, getSop, getVersion, createSop, updateSop, addVersion, forAttach, pinned };
+module.exports = { STATUSES, MAX_STEPS, readContent, listSops, getSop, getVersion, createSop, updateSop, addVersion, forAttach, pinned };

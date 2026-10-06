@@ -116,3 +116,11 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 
 - Structured notes (summary, agenda, discussion, decisions, requests, follow-ups) kept as plain text sections; steps 3 to 6 will turn decisions, requests and follow-ups into real records. Spec: `docs/specs/2026-10-06-phase-10-meeting-notes.md`.
 - One note per event, linked both ways. Attendees write a draft; only a manager finalizes, reopens or deletes. AI can draft and edit drafts but never finalizes.
+
+## 2026-10-06: Phase 13 SOP change requests built (roadmap step 11)
+
+- A change request belongs to an SOP and moves through identified, needs review, approved, in progress, testing and published, or is rejected with a reason. Spec: `docs/specs/2026-10-06-phase-13-sop-change-requests.md`. Migration 017.
+- Publishing never overwrites an approved SOP. It adds a new version through `sops.addVersion` in the same transaction and records which version it made. Tasks pinned to an older version keep it. Content comes from the request's proposed content, or is written in the publish sheet.
+- Permissions: `sopchanges.view` and `sopchanges.create` for everyone, `sopchanges.manage` for Manager and above. A Contractor raises one only on an SOP of their own task and sees only their own. Only a manager publishes.
+- An AI can raise requests and edit drafts (identified or needs review). It cannot approve, reject, start, test or publish, enforced in the service and in the plan guard. There is no publish tool.
+- Screens: a Change requests panel and Raise button on the SOP page, `#/sops/changes` with status filters, and a Raise SOP change request shortcut on the QA review sheet.

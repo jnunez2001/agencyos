@@ -2,6 +2,7 @@
 // QA: the queue of work waiting for review, and the review sheet.
 import { h, openSheet } from '../dom.js';
 import { api } from '../api.js';
+import { openRaiseChange } from './sopchanges.js';
 import { avatar, formatWhen, textareaField } from '../ui.js';
 
 export async function openReview(session, taskId, onChanged) {
@@ -28,6 +29,10 @@ export async function openReview(session, taskId, onChanged) {
     };
     approve.addEventListener('click', send('approved'));
     changes.addEventListener('click', send('changes_requested'));
+    // Small and additive: a reviewer who asks for changes can also raise a change to the SOP the work followed.
+    const raise = task.sop && session.can['sopchanges.create']
+      ? h('button', { class: 'btn', type: 'button', onclick: () => { close(); openRaiseChange(session, { sopId: task.sop.id, sopTitle: task.sop.title, sourceType: 'qa_review', sourceId: pending.id, title: `Change after QA of ${task.title}`.slice(0, 200), details: comments.input.value }); } }, 'Raise SOP change request')
+      : null;
     return h('div', { class: 'sheet-body' },
       h('p', { class: 'muted' }, `${task.projectName}, ${task.clientName}. Submitted by ${pending.submittedByName || 'someone'} ${formatWhen(pending.submittedAt)}.`),
       task.sop ? h('p', {}, `Following ${task.sop.title} v${task.sop.version}.`) : null,
@@ -35,7 +40,7 @@ export async function openReview(session, taskId, onChanged) {
         ? h('div', { class: 'field' }, h('span', { class: 'label' }, 'Quality checklist'), h('div', { class: 'checks' }, pending.checklist.map((item, i) => h('label', { class: 'check' }, boxes[i], h('span', {}, item.text)))))
         : h('p', { class: 'muted' }, 'This task has no checklist.'),
       comments.el, error,
-      h('div', { class: 'sheet-actions' }, h('button', { class: 'btn', type: 'button', onclick: () => close() }, 'Cancel'), changes, approve));
+      h('div', { class: 'sheet-actions' }, h('button', { class: 'btn', type: 'button', onclick: () => close() }, 'Cancel'), raise, changes, approve));
   });
 }
 
