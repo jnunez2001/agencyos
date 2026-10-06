@@ -10,7 +10,7 @@ export const projectPill = (s) => pill('ps', s, PROJECT_STATUS_LABEL[s] || s);
 let statusFilter = 'open';
 
 export async function openProjectForm(session, { project, clientId } = {}, onChanged) {
-  const [clients, members] = await Promise.all([api('GET', '/clients'), api('GET', '/members')]);
+  const [clients, members, services] = await Promise.all([api('GET', '/clients'), api('GET', '/members'), session.can['services.view'] ? api('GET', '/services') : []]);
   const usable = clients.filter((c) => c.status !== 'archived' || (project && project.clientId === c.id));
   openSheet(project ? 'Edit project' : 'New project', (close) => {
     const name = field('Name', { name: 'name', maxlength: 120, required: true, value: project ? project.name : '' });
@@ -20,8 +20,22 @@ export async function openProjectForm(session, { project, clientId } = {}, onCha
     const start = field('Start date', { name: 'startDate', type: 'date', value: project && project.startDate ? project.startDate : '' });
     const due = field('Due date', { name: 'dueDate', type: 'date', value: project && project.dueDate ? project.dueDate : '' });
     const description = textareaField('Description', { name: 'description', maxlength: 5000 }, project ? project.description : '');
-    return sheetForm([name, client, h('div', { class: 'two' }, status.el, manager.el), h('div', { class: 'two' }, start.el, due.el), description], project ? 'Save' : 'Add project', async () => {
-      const body = { name: name.input.value, clientId: Number(client.input.value), status: status.input.value, managerId: manager.input.value === '' ? null : Number(manager.input.value), startDate: start.input.value || null, dueDate: due.input.value || null, description: description.input.value };
+    const svcOptions = [['', 'No service'], ...services.map((x) => [x.id, x.name])];
+    if (project && project.serviceId && !services.some((x) => x.id === project.serviceId)) svcOptions.push([project.serviceId, project.serviceName]);
+    const service = selectField('Service', svcOptions, project && project.serviceId ? project.serviceId : '', { name: 'serviceId' });
+    // The goals offered are those of the chosen client, and they follow the client choice.
+    const goal = selectField('Goal', [['', 'No goal']], '', { name: 'goalId' });
+    const loadGoals = async () => {
+      let list = [];
+      try { list = await api('GET', `/clients/${client.input.value}/goals`); } catch { /* no goals to offer */ }
+      const keep = project && Number(client.input.value) === project.clientId ? project.goalId : null;
+      const options = list.filter((x) => x.status === 'active' || x.id === keep).map((x) => [x.id, x.title]);
+      goal.input.replaceChildren(...[['', 'No goal'], ...options].map(([v, l]) => h('option', { value: v, selected: String(v) === String(keep || '') }, l)));
+    };
+    client.input.addEventListener('change', loadGoals);
+    loadGoals();
+    return sheetForm([name, client, h('div', { class: 'two' }, status.el, manager.el), h('div', { class: 'two' }, start.el, due.el), h('div', { class: 'two' }, service.el, goal.el), description], project ? 'Save' : 'Add project', async () => {
+      const body = { name: name.input.value, clientId: Number(client.input.value), status: status.input.value, managerId: manager.input.value === '' ? null : Number(manager.input.value), startDate: start.input.value || null, dueDate: due.input.value || null, description: description.input.value, serviceId: service.input.value === '' ? null : Number(service.input.value), goalId: goal.input.value === '' ? null : Number(goal.input.value) };
       if (project) await api('PATCH', `/projects/${project.id}`, body); else await api('POST', '/projects', body);
       await onChanged();
     }, close);
@@ -36,6 +50,8 @@ async function projectPage(session, id, rerender) {
     h('dt', {}, 'Manager'), h('dd', {}, project.managerName || 'Nobody'),
     h('dt', {}, 'Start'), h('dd', {}, project.startDate ? formatDay(project.startDate) : 'No date'),
     h('dt', {}, 'Due'), h('dd', {}, project.dueDate ? formatDay(project.dueDate) : 'No date'),
+    h('dt', {}, 'Service'), h('dd', {}, project.serviceName || 'Not set'),
+    h('dt', {}, 'Goal'), h('dd', {}, project.goalTitle || 'Not set'),
     h('dt', {}, 'Tasks'), h('dd', {}, `${project.openTasks} open, ${project.doneTasks} done`));
   return h('div', { class: 'page' },
     h('a', { class: 'back', href: '#/projects' }, icon('back'), 'Projects'),

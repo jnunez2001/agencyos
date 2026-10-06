@@ -10,9 +10,10 @@ const clients = require('./clients');
 const projects = require('./projects');
 const tasks = require('./tasks');
 const sops = require('./sops');
+const goals = require('./goals');
 
 const MAX_STEPS = 50;
-const REF_KEYS = ['clientId', 'projectId', 'taskId', 'sopId', 'id'];
+const REF_KEYS = ['clientId', 'projectId', 'taskId', 'sopId', 'goalId', 'id'];
 const NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;
 
 const withId = (args, fn) => { const { id, ...rest } = args; return fn(id, rest); };
@@ -27,6 +28,8 @@ const ACTIONS = {
   create_task: (db, ctx, a) => tasks.createTask(db, ctx, a),
   update_task: (db, ctx, a) => withId(a, (id, rest) => tasks.updateTask(db, ctx, id, rest)),
   add_comment: (db, ctx, a) => { const { taskId, ...rest } = a; return tasks.addComment(db, ctx, taskId, rest); },
+  create_goal: (db, ctx, a) => { const { clientId, ...rest } = a; return goals.createGoal(db, ctx, clientId, rest); },
+  update_goal: (db, ctx, a) => withId(a, (id, rest) => goals.updateGoal(db, ctx, id, rest)),
   create_sop: (db, ctx, a) => sops.createSop(db, ctx, a),
   update_sop: (db, ctx, a) => withId(a, (id, rest) => sops.updateSop(db, ctx, id, rest)),
   add_sop_version: (db, ctx, a) => withId(a, (id, rest) => sops.addVersion(db, ctx, id, rest)),
@@ -121,6 +124,8 @@ function describe(db, organizationId, steps) {
       case 'update_project': line = `Change project ${nameOf('projects', 'name', a.id)}: ${changed}`; break;
       case 'create_task': line = `Create task "${a.title}" in ${nameOf('projects', 'name', a.projectId)}`; break;
       case 'update_task': line = `Change task ${nameOf('tasks', 'title', a.id)}: ${changed}`; break;
+      case 'create_goal': line = `Add goal "${a.title}" for ${nameOf('clients', 'name', a.clientId)}`; break;
+      case 'update_goal': line = `Change goal ${nameOf('client_goals', 'title', a.id)}: ${changed}`; break;
       case 'create_sop': line = `Create SOP "${a.title}"${a.status ? ` (${a.status})` : ''}`; break;
       case 'update_sop': line = `Change SOP ${nameOf('sops', 'title', a.id)}: ${changed}`; break;
       case 'add_sop_version': line = `Add a new version to SOP ${nameOf('sops', 'title', a.id)}${a.changeNote ? `: ${trim(a.changeNote)}` : ''}`; break;

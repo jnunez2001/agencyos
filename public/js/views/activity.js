@@ -30,6 +30,10 @@ const SENTENCE = {
   'ai.proposal.approve': 'approved changes from the AI inbox',
   'ai.proposal.reject': 'rejected changes from the AI inbox',
   'ai.proposal.fail': 'could not apply approved changes',
+  'service.create': 'added a service',
+  'service.update': 'changed a service',
+  'goal.create': 'added a client goal',
+  'goal.update': 'changed a client goal',
   'sop.create': 'added an SOP',
   'sop.update': 'changed an SOP',
   'sop.version': 'added an SOP version',
@@ -43,11 +47,11 @@ const SENTENCE = {
   'login.locked': 'was locked out after too many tries',
 };
 
-const FIELD = { role: 'Role', displayName: 'Name', isActive: 'Active', name: 'Name', timezone: 'Timezone', username: 'Username', jobTitle: 'Job title', department: 'Department', workDays: 'Working days', requiresQa: 'Needs QA', qaRequired: 'Needs QA', sopId: 'SOP', version: 'Version', changeNote: 'Note', access: 'Access', title: 'Title', description: 'Description', status: 'Status', priority: 'Priority', dueDate: 'Due date', startDate: 'Start date', estimateHours: 'Estimate', website: 'Website', industry: 'Industry', notes: 'Notes', email: 'Email', phone: 'Phone', roleTitle: 'Role', isPrimary: 'Primary', assigneeId: 'Assignee', managerId: 'Manager', projectId: 'Project', clientId: 'Client', workStart: 'Start', workEnd: 'End', weeklyCapacityHours: 'Capacity' };
+const FIELD = { role: 'Role', displayName: 'Name', isActive: 'Active', name: 'Name', timezone: 'Timezone', username: 'Username', jobTitle: 'Job title', department: 'Department', workDays: 'Working days', services: 'Services', accountOwnerId: 'Account owner', goalId: 'Goal', why: 'Why', target: 'Target', requiresQa: 'Needs QA', qaRequired: 'Needs QA', sopId: 'SOP', version: 'Version', changeNote: 'Note', access: 'Access', title: 'Title', description: 'Description', status: 'Status', priority: 'Priority', dueDate: 'Due date', startDate: 'Start date', estimateHours: 'Estimate', website: 'Website', industry: 'Industry', notes: 'Notes', email: 'Email', phone: 'Phone', roleTitle: 'Role', isPrimary: 'Primary', assigneeId: 'Assignee', managerId: 'Manager', projectId: 'Project', clientId: 'Client', workStart: 'Start', workEnd: 'End', weeklyCapacityHours: 'Capacity' };
 const show = (v) => (v == null ? 'none' : Array.isArray(v) ? v.join(', ') : typeof v === 'boolean' ? (v ? 'yes' : 'no') : String(v));
 
-const LONG = new Set(['description', 'notes']); // long text and ids are not worth printing
-const ID = new Set(['assigneeId', 'managerId', 'projectId', 'clientId', 'sopId', 'ownerId']);
+const LONG = new Set(['description', 'notes', 'why']); // long text and ids are not worth printing
+const ID = new Set(['assigneeId', 'managerId', 'projectId', 'clientId', 'sopId', 'ownerId', 'goalId', 'accountOwnerId', 'serviceId']);
 // "Role: employee to manager" for each field that changed. Ids carry no meaning on their own, so a new record skips them.
 function changes(row) {
   const after = row.after || {};

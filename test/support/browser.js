@@ -8,9 +8,9 @@ const { JSDOM } = require('jsdom');
 const PUBLIC = path.resolve(__dirname, '..', '..', 'public');
 
 const ROLES = ['owner', 'admin', 'manager', 'employee', 'contractor'];
-const WORK = { 'sops.view': 1, 'sops.manage': 1, 'qa.review': 1, 'clients.view': 1, 'clients.manage': 1, 'projects.view': 1, 'projects.manage': 1, 'tasks.view': 1, 'tasks.manage': 1, 'tasks.work': 1, 'dashboard.agency': 1 };
+const WORK = { 'services.view': 1, 'sops.view': 1, 'sops.manage': 1, 'qa.review': 1, 'clients.view': 1, 'clients.manage': 1, 'projects.view': 1, 'projects.manage': 1, 'tasks.view': 1, 'tasks.manage': 1, 'tasks.work': 1, 'dashboard.agency': 1 };
 const CAN = {
-  owner: { 'org.view': 1, 'org.update': 1, 'members.list': 1, 'members.create': 1, 'members.manage': 1, 'profile.edit_others': 1, 'profile.edit_self': 1, 'activity.view': 1, 'dashboard.team': 1, 'ai.use': 1, 'ai.manage': 1, 'ai.approve': 1, ...WORK },
+  owner: { 'services.manage': 1, 'org.view': 1, 'org.update': 1, 'members.list': 1, 'members.create': 1, 'members.manage': 1, 'profile.edit_others': 1, 'profile.edit_self': 1, 'activity.view': 1, 'dashboard.team': 1, 'ai.use': 1, 'ai.manage': 1, 'ai.approve': 1, ...WORK },
   manager: { 'ai.use': 1, 'org.view': 1, 'members.list': 1, 'profile.edit_self': 1, 'dashboard.team': 1, ...WORK },
   employee: { 'sops.view': 1, 'ai.use': 1, 'org.view': 1, 'members.list': 1, 'profile.edit_self': 1, 'clients.view': 1, 'projects.view': 1, 'tasks.view': 1, 'tasks.work': 1, 'dashboard.agency': 1 },
   contractor: { 'ai.use': 1, 'org.view': 1, 'profile.edit_self': 1, 'tasks.view': 1, 'tasks.work': 1 },
@@ -24,9 +24,11 @@ const PEOPLE = [
   { id: 4, username: 'sarah', displayName: 'Sarah', role: 'employee', isActive: false, jobTitle: '', department: 'SEO', mustChangePassword: false },
 ];
 const NOW = new Date().toISOString();
-const clientRow = (id, name, status, openProjects) => ({ id, name, status, website: id === 1 ? 'https://acme.example' : '', industry: id === 1 ? 'Dental' : '', notes: id === 1 ? 'Prefers email' : '', openProjects, createdAt: NOW, updatedAt: NOW });
+const GOAL = { id: 1, clientId: 1, title: 'Increase qualified organic leads', why: 'Quiet off season', target: '50 leads a month', dueDate: '2027-03-31', serviceId: 1, serviceName: 'SEO', status: 'active', createdAt: NOW, updatedAt: NOW, progress: { tasksTotal: 4, tasksDone: 1, projects: 1 } };
+const SERVICES = [{ id: 1, name: 'SEO', isActive: true }, { id: 2, name: 'Web Development', isActive: true }];
+const clientRow = (id, name, status, openProjects) => ({ id, services: id === 1 ? [{ id: 1, name: 'SEO' }] : [], accountOwnerId: id === 1 ? 3 : null, accountOwnerName: id === 1 ? 'Mark Cruz' : null, startDate: id === 1 ? '2026-09-01' : null, name, status, website: id === 1 ? 'https://acme.example' : '', industry: id === 1 ? 'Dental' : '', notes: id === 1 ? 'Prefers email' : '', openProjects, createdAt: NOW, updatedAt: NOW });
 const CLIENTS = [clientRow(1, 'Acme Dental', 'active', 1), clientRow(2, 'Beta Bakery', 'paused', 0)];
-const PROJECTS = [{ id: 1, clientId: 1, clientName: 'Acme Dental', name: 'New website', description: 'Rebuild the site', status: 'active', startDate: '2026-10-01', dueDate: '2030-01-31', managerId: 3, managerName: 'Mark Cruz', openTasks: 2, doneTasks: 1 }];
+const PROJECTS = [{ id: 1, clientId: 1, clientName: 'Acme Dental', name: 'New website', description: 'Rebuild the site', status: 'active', startDate: '2026-10-01', dueDate: '2030-01-31', managerId: 3, managerName: 'Mark Cruz', openTasks: 2, doneTasks: 1, serviceId: 1, serviceName: 'SEO', goalId: 1, goalTitle: 'Increase qualified organic leads' }];
 const SOP_CONTENT = { purpose: 'Rank the page', whenToUse: '', inputs: 'URL and keyword', steps: ['Research', 'Write'], checklist: ['Title ok', 'Links ok'], expectedOutput: 'An updated page', commonMistakes: '', examples: '' };
 const PENDING = { id: 5, status: 'pending', submittedByName: 'Rayne', submittedAt: NOW, reviewerName: null, reviewedAt: null, comments: '', checklist: [{ text: 'Title ok', checked: false }, { text: 'Links ok', checked: false }] };
 const PAST = { id: 4, status: 'changes_requested', submittedByName: 'Rayne', submittedAt: '2026-10-01T08:00:00.000Z', reviewerName: 'Mark Cruz', reviewedAt: '2026-10-02T08:00:00.000Z', comments: 'Title was too long', checklist: [{ text: 'Title ok', checked: false }, { text: 'Links ok', checked: true }] };
@@ -34,7 +36,7 @@ const SOP_LIST = [
   { id: 1, title: 'Page Optimization', service: 'SEO', ownerId: 1, ownerName: 'Josh Nunez', status: 'approved', requiresQa: true, version: '1.1', versionId: 2, createdAt: NOW, updatedAt: NOW },
   { id: 2, title: 'Draft idea', service: '', ownerId: 3, ownerName: 'Mark Cruz', status: 'draft', requiresQa: false, version: '1.0', versionId: 3, createdAt: NOW, updatedAt: NOW },
 ];
-const taskRow = (id, title, status, extra = {}) => ({ id, sopId: null, sopTitle: null, sopVersion: null, qaRequired: false, projectId: 1, projectName: 'New website', clientId: 1, clientName: 'Acme Dental', title, description: '', status, priority: 'normal', assigneeId: null, assigneeName: null, dueDate: null, estimateHours: null, completedAt: null, isOverdue: false, createdAt: NOW, updatedAt: NOW, ...extra });
+const taskRow = (id, title, status, extra = {}) => ({ id, goalId: null, goalTitle: null, goalInherited: false, sopId: null, sopTitle: null, sopVersion: null, qaRequired: false, projectId: 1, projectName: 'New website', clientId: 1, clientName: 'Acme Dental', title, description: '', status, priority: 'normal', assigneeId: null, assigneeName: null, dueDate: null, estimateHours: null, completedAt: null, isOverdue: false, createdAt: NOW, updatedAt: NOW, ...extra });
 const RANK = { owner: 5, admin: 4, manager: 3, employee: 2, contractor: 1 };
 
 function answers(role, { mustChange = false, empty = false } = {}) {
@@ -73,8 +75,11 @@ function answers(role, { mustChange = false, empty = false } = {}) {
       { id: 2, summary: 'Set up Acme Dental', status: 'pending', error: null, keyName: 'Claude on my Mac', ownerName: 'Josh Nunez', createdAt: NOW, decidedAt: null, decidedByName: null, steps: 2, lines: ['Create client "Acme Dental"', 'Create project "New website" for "Acme Dental"'] },
       { id: 1, summary: 'Old plan', status: 'failed', error: 'Step 1 (create_client): A client with that name already exists', keyName: null, ownerName: 'Josh Nunez', createdAt: '2026-10-01T08:00:00.000Z', decidedAt: NOW, decidedByName: 'Josh Nunez', steps: 1, lines: ['Create client "Acme Dental"'] },
     ];
+    if (pathname === '/services' && method === 'GET') return url.includes('all=1') ? [...SERVICES, { id: 3, name: 'Old service', isActive: false }] : SERVICES;
+    if (pathname === '/services/defaults' && method === 'POST') return [...SERVICES];
+    if (pathname === '/clients/1/goals' && method === 'GET') return [GOAL];
     if (pathname === '/clients' && method === 'GET') return CLIENTS;
-    if (/^\/clients\/\d+$/.test(pathname) && method === 'GET') return { ...CLIENTS[0], contacts: [{ id: 1, clientId: 1, name: 'Dr. Lee', email: 'lee@acme.example', phone: '', roleTitle: 'Owner', isPrimary: true }, { id: 2, clientId: 1, name: 'Front desk', email: '', phone: '555 0100', roleTitle: '', isPrimary: false }], projects: [{ id: 1, name: 'New website', status: 'active', dueDate: '2030-01-31', openTasks: 2 }] };
+    if (/^\/clients\/\d+$/.test(pathname) && method === 'GET') return { ...CLIENTS[0], contacts: [{ id: 1, clientId: 1, name: 'Dr. Lee', email: 'lee@acme.example', phone: '', roleTitle: 'Owner', isPrimary: true }, { id: 2, clientId: 1, name: 'Front desk', email: '', phone: '555 0100', roleTitle: '', isPrimary: false }], projects: [{ id: 1, name: 'New website', status: 'active', dueDate: '2030-01-31', openTasks: 2, goalTitle: 'Increase qualified organic leads' }], goals: [GOAL] };
     if (pathname === '/projects' && method === 'GET') return PROJECTS;
     if (/^\/projects\/\d+$/.test(pathname) && method === 'GET') return PROJECTS[0];
     if (pathname === '/dashboard') return { organization: { id: 1, name: 'Whalls Agency', timezone: 'Asia/Manila' }, me: { id: me.id, displayName: me.displayName, role }, today: '2026-10-10',

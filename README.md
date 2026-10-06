@@ -6,7 +6,7 @@ The full product plan is in [docs/blueprint.md](docs/blueprint.md). It is the so
 
 ## Status
 
-Phases 1 and 2 are built. Phase 1: setup, login, organizations, five roles, the team, employee profiles and the activity log. Phase 2: clients with contacts, projects, tasks with comments, list and board views, and a dashboard with my work, agency totals and team workload. Phase 3: AI access. An MCP server at `/mcp` lets an AI such as Claude read and set up your work with an API key, and changes wait in an AI inbox for approval by default. Phase 4: SOPs with versions, SOPs attached to tasks, starting work from an SOP, and a QA queue with checklists, approval and requested changes. Calendar, time tracking, knowledge and reports are next.
+Phases 1 and 2 are built. Phase 1: setup, login, organizations, five roles, the team, employee profiles and the activity log. Phase 2: clients with contacts, projects, tasks with comments, list and board views, and a dashboard with my work, agency totals and team workload. Phase 3: AI access. An MCP server at `/mcp` lets an AI such as Claude read and set up your work with an API key, and changes wait in an AI inbox for approval by default. Phase 4: SOPs with versions, SOPs attached to tasks, starting work from an SOP, and a QA queue with checklists, approval and requested changes. Phase 5: client goals (with progress from linked work), configurable services, and richer clients (statuses, account owner, start date). Calendar, time tracking, knowledge and reports are next.
 
 ## Run it on your Mac
 

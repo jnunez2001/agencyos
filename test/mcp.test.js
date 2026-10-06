@@ -68,7 +68,7 @@ test('tools/list shows write tools only to keys that can write', async () => {
   const app = await setUp();
   const names = async (access) => (await mcp(app, (await withKey(app, access, access)).token).rpc('tools/list')).result.tools.map((t) => t.name);
   const read = await names('read');
-  assert.deepEqual(read, ['list_clients', 'get_client', 'list_projects', 'get_project', 'list_tasks', 'get_task', 'list_team', 'get_workload', 'list_sops', 'get_sop', 'list_qa_queue']);
+  assert.deepEqual(read, ['list_clients', 'get_client', 'list_projects', 'get_project', 'list_tasks', 'get_task', 'list_team', 'get_workload', 'list_sops', 'get_sop', 'list_services', 'list_goals', 'list_qa_queue']);
   const propose = await names('propose');
   assert.deepEqual(propose.slice(0, read.length), read);
   assert.ok(['apply_changes', 'create_client', 'create_project', 'create_task', 'update_task', 'add_comment'].every((n) => propose.includes(n)));
@@ -200,5 +200,24 @@ test('SOP and QA tools: read for every key, drafting through plans, reviewing ne
   assert.equal(bad.isError, true);
   assert.match(bad.text, /person/i);
   assert.equal((await direct.tool('review_task', { id: 1 })).isError, true);
+  await app.close();
+});
+
+test('service and goal tools: read for every key, goals through plans', async () => {
+  const app = await setUp();
+  await app.owner.call('POST', '/services', { name: 'SEO' });
+  const direct = mcp(app, (await withKey(app, 'direct', 'd')).token);
+  const read = mcp(app, (await withKey(app, 'read', 'r')).token);
+  const services = (await read.tool('list_services')).data;
+  assert.deepEqual(services.map((s) => s.name), ['SEO']);
+  assert.equal((await direct.tool('create_client', { name: 'Acme', status: 'lead', serviceIds: [services[0].id] })).data.status, 'applied');
+  const client = (await read.tool('list_clients')).data[0];
+  assert.deepEqual([client.status, client.services[0].name], ['lead', 'SEO']);
+  const made = await direct.tool('create_goal', { clientId: client.id, title: 'Increase leads', serviceId: services[0].id });
+  assert.equal(made.data.status, 'applied');
+  const goals = (await read.tool('list_goals', { clientId: client.id })).data;
+  assert.deepEqual([goals[0].title, goals[0].serviceName, goals[0].status], ['Increase leads', 'SEO', 'active']);
+  assert.equal((await read.tool('get_client', { id: client.id })).data.goals.length, 1);
+  assert.equal((await read.tool('create_goal', { clientId: client.id, title: 'x' })).isError, true);
   await app.close();
 });

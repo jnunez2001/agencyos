@@ -260,3 +260,28 @@ test('SOP actions: an AI drafts SOPs and starts work from them, but a person mus
   const p = plans.submitPlan(f.db, ask, { summary: 'Another SOP', steps: [{ action: 'create_sop', args: { title: 'Link Building', status: 'draft' } }, { action: 'update_sop', args: { id: sop.id, service: 'Local SEO' } }] });
   assert.deepEqual(p.lines, ['Create SOP "Link Building" (draft)', 'Change SOP "Page Optimization": service']);
 });
+
+test('goal actions: an AI sets up a client with goals and links work to them', async () => {
+  const f = await fixture();
+  const goalsSvc = require('../server/services/goals');
+  const servicesSvc = require('../server/services/services');
+  const seo = servicesSvc.createService(f.db, f.josh, { name: 'SEO' });
+  const { auth } = keyFor(f, f.josh, 'direct');
+  const r = plans.submitPlan(f.db, auth, { summary: 'Set up Cedar with a goal', steps: [
+    { action: 'create_client', as: 'c', args: { name: 'Cedar', status: 'onboarding', serviceIds: [seo.id], accountOwnerId: f.ids.mark, startDate: '2026-10-01' } },
+    { action: 'create_goal', as: 'g', args: { clientId: '$c', title: 'Increase qualified organic leads', target: '50 a month', serviceId: seo.id } },
+    { action: 'create_project', as: 'p', args: { clientId: '$c', name: 'Local SEO', goalId: '$g', serviceId: seo.id } },
+    { action: 'create_task', args: { projectId: '$p', title: 'Audit the site' } },
+    { action: 'update_goal', args: { id: '$g', target: '80 a month' } },
+  ] });
+  assert.equal(r.status, 'applied');
+  const client = clients.listClients(f.db, f.josh)[0];
+  assert.deepEqual([client.status, client.accountOwnerName, client.services[0].name], ['onboarding', 'Mark', 'SEO']);
+  const g = goalsSvc.listGoals(f.db, f.josh, client.id)[0];
+  assert.deepEqual([g.target, g.progress.tasksTotal, g.progress.projects], ['80 a month', 1, 1]);
+  // services are not an AI matter
+  assert.throws(() => plans.submitPlan(f.db, auth, { summary: 's', steps: [{ action: 'create_service', args: { name: 'X' } }] }), /unknown action/i);
+  const { auth: ask } = keyFor(f, f.josh, 'propose');
+  const p = plans.submitPlan(f.db, ask, { summary: 'A goal', steps: [{ action: 'create_goal', args: { clientId: client.id, title: 'Improve reviews' } }, { action: 'update_goal', args: { id: g.id, status: 'achieved' } }] });
+  assert.deepEqual(p.lines, ['Add goal "Improve reviews" for "Cedar"', 'Change goal "Increase qualified organic leads": status']);
+});

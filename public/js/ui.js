@@ -68,7 +68,8 @@ export const SOP_STATUS_LABEL = { draft: 'Draft', testing: 'Testing', approved: 
 export const QA_RESULT_LABEL = { pending: 'Waiting', approved: 'Approved', changes_requested: 'Changes requested', withdrawn: 'Withdrawn' };
 export const PRIORITY_LABEL = { low: 'Low', normal: 'Normal', high: 'High', urgent: 'Urgent' };
 export const PROJECT_STATUS_LABEL = { planning: 'Planning', active: 'Active', on_hold: 'On hold', completed: 'Completed', archived: 'Archived' };
-export const CLIENT_STATUS_LABEL = { active: 'Active', paused: 'Paused', archived: 'Archived' };
+export const CLIENT_STATUS_LABEL = { lead: 'Lead', onboarding: 'Onboarding', active: 'Active', paused: 'Paused', at_risk: 'At risk', completed: 'Completed', archived: 'Archived' };
+export const GOAL_STATUS_LABEL = { active: 'Active', achieved: 'Achieved', dropped: 'Dropped' };
 
 export const pill = (kind, value, label) => h('span', { class: `pill ${kind}-${value}` }, label);
 export const statusPill = (s) => pill('st', s, STATUS_LABEL[s] || s);

@@ -296,3 +296,20 @@ a.row:hover { background: var(--hover); }
 .sheet-actions.left { justify-content: flex-start; flex-wrap: wrap; }
 .sheet-actions.left:empty { display: none; }
 .checks { display: flex; flex-direction: column; gap: 4px; }
+
+/* ---------- goals and services ---------- */
+.goals { display: flex; flex-direction: column; gap: 10px; }
+.goal { display: flex; flex-direction: column; gap: 6px; width: 100%; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--card); text-align: left; }
+.goal.clickable:hover { border-color: var(--accent); }
+.goal-line { font-weight: 600; }
+.goal p { margin: 0; }
+.pill.svc { background: var(--accent-soft); color: var(--accent); }
+.pill.cs-lead { background: var(--hover); color: var(--muted); }
+.pill.cs-onboarding { background: var(--accent-soft); color: var(--accent); }
+.pill.cs-at_risk { background: #fee2e2; color: #b91c1c; }
+.pill.cs-completed { background: #dcfce7; color: #166534; }
+.pill.gs-active { background: #dcfce7; color: #166534; }
+.pill.gs-achieved { background: var(--accent-soft); color: var(--accent); }
+.pill.gs-dropped { background: var(--hover); color: var(--muted); }
+:root[data-theme="dark"] .pill.cs-at_risk { background: #3b1414; color: #fca5a5; }
+:root[data-theme="dark"] .pill.cs-completed, :root[data-theme="dark"] .pill.gs-active { background: #10321d; color: #86efac; }

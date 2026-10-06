@@ -62,7 +62,8 @@ export async function openTask(session, taskId, onChanged) {
       h('dt', {}, 'Assigned to'), h('dd', {}, task.assigneeName || 'Nobody'),
       h('dt', {}, 'Due'), h('dd', {}, task.dueDate ? h('span', { class: task.isOverdue ? 'due overdue' : '' }, `${formatDay(task.dueDate)}${task.isOverdue ? ' (overdue)' : ''}`) : 'No date'),
       h('dt', {}, 'Priority'), h('dd', {}, priorityPill(task.priority)),
-      h('dt', {}, 'Estimate'), h('dd', {}, task.estimateHours == null ? 'None' : `${task.estimateHours} hours`));
+      h('dt', {}, 'Estimate'), h('dd', {}, task.estimateHours == null ? 'None' : `${task.estimateHours} hours`),
+      task.goalTitle ? [h('dt', {}, 'Goal'), h('dd', {}, task.goalInherited ? `${task.goalTitle} (from the project)` : task.goalTitle)] : null);
     const error = h('div', { class: 'error', role: 'alert' });
     const status = selectField('Status', STATUSES.map((s) => [s, STATUS_LABEL[s]]), task.status, { name: 'status', disabled: !task.canChangeStatus });
     // Changes requested comes only from a review, and work that needs QA reaches Done only by approval.
@@ -112,6 +113,18 @@ export async function openTaskForm(session, { task, projectId } = {}, onChanged)
     const assignee = selectField('Assigned to', [['', 'Nobody'], ...people.map((m) => [m.id, m.displayName])], task && task.assigneeId ? task.assigneeId : '', { name: 'assigneeId' });
     const status = selectField('Status', STATUSES.filter((s) => s !== 'changes' || (task && task.status === 'changes')).map((s) => [s, STATUS_LABEL[s]]), task ? task.status : 'todo', { name: 'status' });
     const priority = selectField('Priority', Object.entries(PRIORITY_LABEL), task ? task.priority : 'normal', { name: 'priority' });
+    // The goals offered are those of the project's client, and they follow the project choice.
+    const goal = selectField('Goal', [['', 'The project\'s goal']], '', { name: 'goalId' });
+    const loadGoals = async () => {
+      const chosen = usable.find((p) => String(p.id) === project.input.value);
+      let list = [];
+      if (chosen && session.can['clients.view']) { try { list = await api('GET', `/clients/${chosen.clientId}/goals`); } catch { /* none */ } }
+      const keep = task && task.goalId && chosen && chosen.id === task.projectId ? task.goalId : null;
+      const options = list.filter((x) => x.status === 'active' || x.id === keep).map((x) => [x.id, x.title]);
+      goal.input.replaceChildren(...[['', 'The project\'s goal'], ...options].map(([v, l]) => h('option', { value: v, selected: String(v) === String(keep || '') }, l)));
+    };
+    project.input.addEventListener('change', loadGoals);
+    loadGoals();
     const sop = selectField('SOP', [['', 'No SOP'], ...sopChoices.map((x) => [x.id, `${x.title} v${x.version}`])], task && task.sopId ? task.sopId : '', { name: 'sopId' });
     const needsQa = h('input', { type: 'checkbox', name: 'qaRequired', checked: task ? task.qaRequired : false });
     // Choosing an SOP carries its QA setting over, which the person can still change.
@@ -124,10 +137,10 @@ export async function openTaskForm(session, { task, projectId } = {}, onChanged)
       title: title.input.value, projectId: Number(project.input.value), assigneeId: assignee.input.value === '' ? null : Number(assignee.input.value),
       status: status.input.value, priority: priority.input.value, dueDate: due.input.value || null,
       estimateHours: estimate.input.value === '' ? null : Number(estimate.input.value), description: description.input.value,
-      sopId: sop.input.value === '' ? null : Number(sop.input.value), qaRequired: needsQa.checked, ...(newest && newest.checked ? { sopLatest: true } : {}),
+      sopId: sop.input.value === '' ? null : Number(sop.input.value), goalId: goal.input.value === '' ? null : Number(goal.input.value), qaRequired: needsQa.checked, ...(newest && newest.checked ? { sopLatest: true } : {}),
     });
     const del = task ? confirmButton('Delete task', 'Click again to delete', async () => { await api('DELETE', `/tasks/${task.id}`); close(); await onChanged(); }) : null;
-    return sheetForm([title, project, h('div', { class: 'two' }, assignee.el, priority.el), h('div', { class: 'two' }, status.el, due.el), estimate, sopChoices.length || allSops.length ? sop : null, h('label', { class: 'check' }, needsQa, h('span', {}, 'Needs QA before it counts as done')), newest ? h('label', { class: 'check' }, newest, h('span', {}, `Use the newest SOP version (${task.sop.latestVersion})`)) : null, description],
+    return sheetForm([title, project, h('div', { class: 'two' }, assignee.el, priority.el), h('div', { class: 'two' }, status.el, due.el), estimate, goal, sopChoices.length || allSops.length ? sop : null, h('label', { class: 'check' }, needsQa, h('span', {}, 'Needs QA before it counts as done')), newest ? h('label', { class: 'check' }, newest, h('span', {}, `Use the newest SOP version (${task.sop.latestVersion})`)) : null, description],
       task ? 'Save' : 'Add task', async () => {
         if (task) await api('PATCH', `/tasks/${task.id}`, payload()); else await api('POST', '/tasks', payload());
         await onChanged();

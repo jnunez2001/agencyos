@@ -56,3 +56,10 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 - Work that needs QA reaches Done only by approval. Changes requested is set only by a review.
 - An AI can draft SOPs and start work from them, but cannot approve an SOP or review work: those are human decisions.
 - Migration 005 rebuilds the tasks table (new status, SOP link). Tested against data from the previous schema. Spec: `docs/specs/2026-10-06-phase-4-sops-and-qa.md`.
+
+## 2026-10-06: Phase 5 goals and services built
+
+- Services are a configurable list (Owner and Admin, in Settings), assigned to clients, projects and goals. Never deleted, only deactivated. SOP service stays free text with suggestions from the list.
+- Goals belong to a client and are achieved or dropped, never deleted. Projects and tasks link to a goal of their own client, and a task inherits its project's goal. Progress is the share of linked tasks that are done.
+- Clients gain the blueprint statuses, an account owner and a start date. Migration 006 rebuilds the clients table, tested against data from the previous schema.
+- An AI can add and change goals and set client fields, but services stay with Owner and Admin. Spec: `docs/specs/2026-10-06-phase-5-goals-and-services.md`.

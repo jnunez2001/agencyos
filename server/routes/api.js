@@ -17,6 +17,8 @@ const aiplans = require('../services/aiplans');
 const oauth = require('../services/oauth');
 const sops = require('../services/sops');
 const qa = require('../services/qa');
+const services = require('../services/services');
+const goals = require('../services/goals');
 const { ServiceError } = require('../services/errors');
 
 function idParam(req) {
@@ -100,6 +102,14 @@ module.exports = function apiRouter(db) {
   r.delete('/tasks/:id', (req, res) => res.json(tasks.deleteTask(db, ctxOf(req), idParam(req))));
   r.get('/tasks/:id/comments', (req, res) => res.json(tasks.listComments(db, ctxOf(req), idParam(req))));
   r.post('/tasks/:id/comments', (req, res) => res.json(tasks.addComment(db, ctxOf(req), idParam(req), req.body)));
+
+  r.get('/services', (req, res) => res.json(services.listServices(db, ctxOf(req), { all: req.query.all === '1' })));
+  r.post('/services', (req, res) => res.json(services.createService(db, ctxOf(req), req.body)));
+  r.post('/services/defaults', (req, res) => res.json(services.addDefaultServices(db, ctxOf(req))));
+  r.patch('/services/:id', (req, res) => res.json(services.updateService(db, ctxOf(req), idParam(req), req.body)));
+  r.get('/clients/:id/goals', (req, res) => res.json(goals.listGoals(db, ctxOf(req), idParam(req), { status: req.query.status })));
+  r.post('/clients/:id/goals', (req, res) => res.json(goals.createGoal(db, ctxOf(req), idParam(req), req.body)));
+  r.patch('/goals/:id', (req, res) => res.json(goals.updateGoal(db, ctxOf(req), idParam(req), req.body)));
 
   r.get('/sops', (req, res) => res.json(sops.listSops(db, ctxOf(req), { status: req.query.status, service: req.query.service, q: req.query.q })));
   r.post('/sops', (req, res) => res.json(sops.createSop(db, ctxOf(req), req.body)));

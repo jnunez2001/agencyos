@@ -30,15 +30,16 @@ const contentBody = (c) => ({
 });
 
 async function openNewSop(session, onCreated) {
-  const members = await api('GET', '/members');
+  const [members, services] = await Promise.all([api('GET', '/members'), session.can['services.view'] ? api('GET', '/services') : []]);
   openSheet('New SOP', (close) => {
     const title = field('Title', { name: 'title', maxlength: 120, required: true });
-    const service = field('Service', { name: 'service', maxlength: 80, placeholder: 'SEO' });
+    const service = field('Service', { name: 'service', maxlength: 80, placeholder: 'SEO', list: 'service-names' });
     const owner = selectField('Owner', members.filter((m) => m.isActive).map((m) => [m.id, m.displayName]), session.user.id, { name: 'ownerId' });
     const status = selectField('Status', STATUSES.filter((s) => s !== 'deprecated').map((s) => [s, SOP_STATUS_LABEL[s]]), 'draft', { name: 'status' });
     const qa = h('input', { type: 'checkbox', name: 'requiresQa' });
     const c = contentFields();
-    return sheetForm([title, h('div', { class: 'two' }, service.el, owner.el), status, h('label', { class: 'check' }, qa, h('span', {}, 'Work following this SOP needs QA')), c.purpose, c.whenToUse, c.inputs, c.steps, c.checklist, c.expectedOutput, c.commonMistakes, c.examples], 'Create SOP', async () => {
+    const names = h('datalist', { id: 'service-names' }, services.map((x) => h('option', { value: x.name })));
+    return sheetForm([title, h('div', { class: 'two' }, service.el, owner.el), names, status, h('label', { class: 'check' }, qa, h('span', {}, 'Work following this SOP needs QA')), c.purpose, c.whenToUse, c.inputs, c.steps, c.checklist, c.expectedOutput, c.commonMistakes, c.examples], 'Create SOP', async () => {
       const made = await api('POST', '/sops', { title: title.input.value, service: service.input.value, ownerId: Number(owner.input.value), status: status.input.value, requiresQa: qa.checked, ...contentBody(c) });
       await onCreated(made);
     }, close);

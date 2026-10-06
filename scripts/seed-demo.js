@@ -11,6 +11,8 @@ const clients = require('../server/services/clients');
 const projects = require('../server/services/projects');
 const tasks = require('../server/services/tasks');
 const sops = require('../server/services/sops');
+const services = require('../server/services/services');
+const goals = require('../server/services/goals');
 const { todayIn, addDays } = require('../server/services/dates');
 
 const PASSWORD = 'demo-password-123';
@@ -41,15 +43,19 @@ const PASSWORD = 'demo-password-123';
   const id = (u) => db.prepare('SELECT id FROM users WHERE username = ?').get(u).id;
   const today = todayIn('Asia/Manila');
   const day = (n) => addDays(today, n);
-  const acme = clients.createClient(db, owner, { name: 'Acme Dental', industry: 'Dental', website: 'https://acme-dental.example', notes: 'Prefers updates by email on Fridays.' });
-  const bloom = clients.createClient(db, owner, { name: 'Bloom Florist', industry: 'Retail', website: 'https://bloom.example' });
+  const svc = Object.fromEntries(services.addDefaultServices(db, owner).map((x) => [x.name, x.id]));
+  const acme = clients.createClient(db, owner, { name: 'Acme Dental', industry: 'Dental', website: 'https://acme-dental.example', notes: 'Prefers updates by email on Fridays.', serviceIds: [svc.SEO, svc['Web Development']], accountOwnerId: id('mark'), startDate: day(-60) });
+  const bloom = clients.createClient(db, owner, { name: 'Bloom Florist', industry: 'Retail', website: 'https://bloom.example', status: 'onboarding', serviceIds: [svc['Web Development']], accountOwnerId: id('rayne'), startDate: day(-7) });
   clients.createClient(db, owner, { name: 'Harbor Law', industry: 'Legal', status: 'paused' });
   clients.addContact(db, owner, acme.id, { name: 'Dr. Ana Lee', email: 'ana@acme-dental.example', roleTitle: 'Owner', isPrimary: true });
   clients.addContact(db, owner, acme.id, { name: 'Front desk', phone: '555 0100' });
   clients.addContact(db, owner, bloom.id, { name: 'Mia Torres', email: 'mia@bloom.example', roleTitle: 'Manager', isPrimary: true });
-  const site = projects.createProject(db, owner, { clientId: acme.id, name: 'New website', status: 'active', description: 'Rebuild the practice website with online booking.', startDate: day(-14), dueDate: day(30), managerId: id('mark') });
-  const seo = projects.createProject(db, owner, { clientId: acme.id, name: 'Local SEO', status: 'active', description: 'Google Business Profile and citations.', startDate: day(-30), dueDate: day(60), managerId: id('mark') });
-  const shop = projects.createProject(db, owner, { clientId: bloom.id, name: 'Online shop', status: 'planning', startDate: day(7), dueDate: day(75), managerId: id('rayne') });
+  const gLeads = goals.createGoal(db, owner, acme.id, { title: 'Increase qualified organic leads', why: 'Phones are quiet outside the summer season', target: '50 qualified leads a month', dueDate: day(180), serviceId: svc.SEO });
+  const gSite = goals.createGoal(db, owner, acme.id, { title: 'Launch a conversion-focused website', target: 'Online booking live', dueDate: day(45), serviceId: svc['Web Development'] });
+  goals.createGoal(db, owner, bloom.id, { title: 'Start selling online', target: 'First 20 online orders', dueDate: day(120), serviceId: svc['Web Development'] });
+  const site = projects.createProject(db, owner, { clientId: acme.id, goalId: gSite.id, serviceId: svc['Web Development'], name: 'New website', status: 'active', description: 'Rebuild the practice website with online booking.', startDate: day(-14), dueDate: day(30), managerId: id('mark') });
+  const seo = projects.createProject(db, owner, { clientId: acme.id, goalId: gLeads.id, serviceId: svc.SEO, name: 'Local SEO', status: 'active', description: 'Google Business Profile and citations.', startDate: day(-30), dueDate: day(60), managerId: id('mark') });
+  const shop = projects.createProject(db, owner, { clientId: bloom.id, serviceId: svc['Web Development'], name: 'Online shop', status: 'planning', startDate: day(7), dueDate: day(75), managerId: id('rayne') });
   const citation = sops.createSop(db, owner, {
     title: 'Local Citation Clean-up', service: 'SEO', status: 'approved', requiresQa: true,
     purpose: 'Make a business name, address and phone number match on every directory.',
