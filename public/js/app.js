@@ -14,6 +14,7 @@ import { connectView } from './views/connect.js';
 import { sopsView } from './views/sops.js';
 import { qaView } from './views/qa.js';
 import { reportsView } from './views/reports.js';
+import { googleResultView } from './views/googleresult.js';
 import { tasksView } from './views/tasks.js';
 import { projectsView } from './views/projects.js';
 import { clientsView } from './views/clients.js';
@@ -22,7 +23,7 @@ import { visibleNav, bottomNav } from './nav.js';
 const root = document.getElementById('app');
 let session = null;
 
-const VIEWS = { dashboard: dashboardView, tasks: tasksView, projects: projectsView, clients: clientsView, ai: aiView, connect: connectView, sops: sopsView, qa: qaView, reports: reportsView, team: teamView, activity: activityView, settings: settingsView, profile: profileView };
+const VIEWS = { dashboard: dashboardView, tasks: tasksView, projects: projectsView, clients: clientsView, ai: aiView, connect: connectView, sops: sopsView, qa: qaView, reports: reportsView, google: googleResultView, team: teamView, activity: activityView, settings: settingsView, profile: profileView };
 
 function currentTheme() { return document.documentElement.getAttribute('data-theme') || 'light'; }
 function toggleTheme() {
@@ -47,12 +48,12 @@ async function signOut() {
 
 // '#/projects/12' is the projects screen with the parameter '12'.
 function route() {
-  const [key, param] = location.hash.replace(/^#\/?/, '').split('/');
-  const allowed = [...visibleNav(session).map((n) => n.key), 'profile', 'connect'];
-  if (allowed.includes(key || 'dashboard')) return { key: key || 'dashboard', param: param || '' };
+  const [key, param, extra] = location.hash.replace(/^#\/?/, '').split('/');
+  const allowed = [...visibleNav(session).map((n) => n.key), 'profile', 'connect', 'google'];
+  if (allowed.includes(key || 'dashboard')) return { key: key || 'dashboard', param: param || '', extra: extra || '' };
   // A screen this person may not use: show the dashboard and fix the address so Back does not loop.
   history.replaceState(null, '', '#/dashboard');
-  return { key: 'dashboard', param: '' };
+  return { key: 'dashboard', param: '', extra: '' };
 }
 
 function shell(key, main) {
@@ -83,10 +84,10 @@ let renderSeq = 0;
 async function render() {
   if (!session) return;
   const seq = ++renderSeq;
-  const { key, param } = route();
+  const { key, param, extra } = route();
   const main = h('main', { class: 'main' });
   try {
-    main.append(await VIEWS[key](session, { param, rerender: render, refresh: async () => { await refreshSession(); await render(); } }));
+    main.append(await VIEWS[key](session, { param, extra, rerender: render, refresh: async () => { await refreshSession(); await render(); } }));
   } catch (err) {
     if (err.status === 401) return boot();
     if (err.code === 'must_change_password') return boot();

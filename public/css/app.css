@@ -339,3 +339,6 @@ a.row:hover { background: var(--hover); }
   .panel { border: 0; box-shadow: none; padding: 0; background: none; }
   .head-actions { display: none !important; }
 }
+.advanced { border-top: 1px solid var(--line); padding-top: 12px; }
+.advanced summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+.advanced > div { margin-top: 10px; }

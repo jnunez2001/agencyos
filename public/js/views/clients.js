@@ -120,18 +120,33 @@ function metricCard(session, clientId, m, goals, metrics, rerender) {
 // ---- Google data ----
 
 async function openGoogleConnect(session, client, onChanged) {
-  const status = await api('GET', '/integrations/google');
-  const avail = status.configured ? await api('GET', '/integrations/google/available') : { sites: [], properties: [] };
+  const choices = await api('GET', '/integrations/google/choices');
   openSheet('Connect Google', (close) => {
-    const site = selectField('Search Console site', [['', 'None'], ...avail.sites.map((x) => [x.siteUrl, x.siteUrl])], '', { name: 'gscSiteUrl' });
-    const property = selectField('Analytics property', [['', 'None'], ...avail.properties.map((x) => [x.id, `${x.name} (${x.id}), ${x.account}`])], '', { name: 'ga4PropertyId' });
-    const notes = [];
-    if (avail.problems) notes.push(...avail.problems.map((t) => h('p', { class: 'error' }, t)));
-    notes.push(h('p', { class: 'muted' }, status.email ? `Only sites and properties shared with ${status.email} appear here. Add that address as a read-only user for the client first.` : 'Google is not set up on this server.'));
-    return sheetForm([site, property], 'Connect and fetch the numbers', async () => {
-      await api('PUT', `/clients/${client.id}/google`, { gscSiteUrl: site.input.value || null, ga4PropertyId: property.input.value || null });
+    if (choices.length === 0) {
+      return h('div', { class: 'sheet-body' }, h('p', {}, 'No Google account is connected yet. An Owner or Admin adds one under Settings, then Google.'), h('div', { class: 'sheet-actions' }, h('button', { class: 'btn', type: 'button', onclick: () => close() }, 'Close')));
+    }
+    const account = selectField('Google account', choices.map((c) => [c.source, c.label]), choices[0].source, { name: 'source' });
+    const search = field('Search', { name: 'search', type: 'search', placeholder: 'Search sites and properties' });
+    const site = selectField('Search Console site', [['', 'None']], '', { name: 'gscSiteUrl' });
+    const property = selectField('Analytics property', [['', 'None']], '', { name: 'ga4PropertyId' });
+    const problems = h('div', {});
+    // The lists follow the chosen account, and the search box narrows both.
+    const fill = () => {
+      const c = choices.find((x) => x.source === account.input.value);
+      const q = search.input.value.trim().toLowerCase();
+      const keep = (text) => !q || text.toLowerCase().includes(q);
+      const options = (select, items, value, label) => select.input.replaceChildren(...[['', 'None'], ...items.filter((it) => keep(label(it))).map((it) => [value(it), label(it)])].map(([v, l]) => h('option', { value: v }, l)));
+      options(site, c.sites, (x) => x.siteUrl, (x) => x.siteUrl);
+      options(property, c.properties, (x) => x.id, (x) => `${x.name} (${x.id}), ${x.account}`);
+      problems.replaceChildren(...c.problems.map((t) => h('p', { class: 'error' }, t)), ...(c.status === 'needs_reconnect' ? [h('p', { class: 'error' }, 'This account needs reconnecting. An Owner or Admin can do that under Settings.')] : []));
+    };
+    account.input.addEventListener('change', fill);
+    search.input.addEventListener('input', fill);
+    fill();
+    return sheetForm([account, search, site, property], 'Connect and fetch the numbers', async () => {
+      await api('PUT', `/clients/${client.id}/google`, { source: account.input.value, gscSiteUrl: site.input.value || null, ga4PropertyId: property.input.value || null });
       await onChanged();
-    }, close, h('div', {}, notes));
+    }, close, problems);
   });
 }
 
@@ -152,12 +167,13 @@ function googlePanel(session, client, status, link, rerender) {
   if (link) {
     body = h('div', { class: 'stack' },
       h('dl', { class: 'facts' },
+        h('dt', {}, 'Google account'), h('dd', {}, link.accountEmail || 'Service account'),
         link.gscSiteUrl ? [h('dt', {}, 'Search Console'), h('dd', {}, link.gscSiteUrl)] : null,
         link.ga4PropertyId ? [h('dt', {}, 'Analytics'), h('dd', {}, `Property ${link.ga4PropertyId}`)] : null,
         h('dt', {}, 'Last synced'), h('dd', {}, link.lastSyncAt ? `${formatWhen(link.lastSyncAt)}${link.lastSyncStatus && link.lastSyncStatus !== 'ok' ? `, ${link.lastSyncStatus === 'partial' ? 'with a problem' : 'failed'}` : ''}` : 'Not yet')),
       link.lastSyncError ? h('p', { class: 'error' }, link.lastSyncError) : null, message);
   } else if (!status.configured) {
-    body = h('p', { class: 'muted' }, 'Google is not set up on this server. An Owner or Admin installs the key under Settings.');
+    body = h('p', { class: 'muted' }, status.signIn && status.signIn.configured ? 'No Google account is connected yet. An Owner or Admin adds one under Settings, then Google.' : 'Google is not set up on this server. An Owner or Admin can set it up under Settings.');
   } else {
     body = h('p', { class: 'muted' }, 'Not connected. Connect Search Console and Analytics to fill results automatically.');
   }

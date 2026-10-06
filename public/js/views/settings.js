@@ -1,7 +1,7 @@
 // Joshua Nunez
 import { h, icon, openSheet } from '../dom.js';
 import { api } from '../api.js';
-import { field, sheetForm, toggleSwitch, pill } from '../ui.js';
+import { field, sheetForm, toggleSwitch, confirmButton } from '../ui.js';
 
 function openService(service, onChanged) {
   openSheet(service ? 'Edit service' : 'New service', (close) => {
@@ -25,21 +25,42 @@ async function servicesPanel(rerender) {
         h('div', { class: 'grow' }, h('div', { class: 'row-title' }, x.name, x.isActive ? null : h('span', { class: 'pill off' }, 'Not in use'))), icon('chevron')))));
 }
 
-async function googleSettings() {
+async function googleSettings(rerender) {
   const status = await api('GET', '/integrations/google');
-  const copy = status.email ? h('button', { class: 'btn', type: 'button' }, 'Copy address') : null;
-  if (copy) copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(status.email); copy.textContent = 'Copied'; } catch { copy.textContent = 'Select and copy it by hand'; } });
+  const copy = status.serviceAccount.email ? h('button', { class: 'btn', type: 'button' }, 'Copy address') : null;
+  if (copy) copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(status.serviceAccount.email); copy.textContent = 'Copied'; } catch { copy.textContent = 'Select and copy it by hand'; } });
+  const error = h('p', { class: 'error', role: 'alert' });
+  const add = status.signIn.configured && status.canManageAccounts
+    ? h('button', { class: 'btn btn-primary', type: 'button', onclick: async () => {
+      error.textContent = '';
+      try { const out = await api('POST', '/integrations/google/accounts/start', { returnTo: 'settings' }); location.assign(out.url); } catch (err) { error.textContent = err.message; }
+    } }, icon('plus'), 'Add Google account')
+    : null;
+  const accountRows = status.accounts.map((a) => h('div', { class: 'row static' },
+    h('div', { class: 'grow' }, h('div', { class: 'row-title' }, a.email, a.status === 'ok' ? null : h('span', { class: 'pill off' }, 'Needs reconnecting')),
+      h('div', { class: 'row-sub' }, `${a.clients} ${a.clients === 1 ? 'client' : 'clients'}${a.connectedByName ? ` · added by ${a.connectedByName}` : ''}`)),
+    status.canManageAccounts && a.status !== 'ok' && add ? h('button', { class: 'btn-text', type: 'button', onclick: () => add.click() }, 'Reconnect') : null,
+    status.canManageAccounts ? confirmButton('Remove', 'Click again to remove', async () => { await api('DELETE', `/integrations/google/accounts/${a.id}`); await rerender(); }) : null));
+  const setupSteps = h('div', { class: 'stack' },
+    h('p', {}, 'Connect your own Google account to pick from every Search Console site and Analytics property it can see. It needs a Google sign-in client from your Google Cloud project.'),
+    h('ol', { class: 'steps' },
+      h('li', {}, 'In Google Cloud, turn on the Search Console API, Analytics Data API and Analytics Admin API.'),
+      h('li', {}, 'Set up the OAuth consent screen (External) and publish it, then create an OAuth client ID of type Web application.'),
+      h('li', {}, `Add this authorized redirect URI: ${location.origin}/api/integrations/google/callback`),
+      h('li', {}, 'On the server run: bash /root/agencyos/deploy/set-google-oauth.sh, and paste the client ID and secret when asked.')),
+    h('p', { class: 'muted' }, 'The secret is stored only on the server and is never shown here.'));
+  const service = h('details', { class: 'advanced' },
+    h('summary', {}, 'Service account (advanced)'),
+    status.serviceAccount.configured
+      ? h('div', { class: 'stack' }, h('p', {}, 'Share a client\'s Search Console and Analytics with this address as a read-only user to use it instead of an account.'), h('div', { class: 'url-row' }, h('code', { class: 'code url' }, status.serviceAccount.email || ''), copy))
+      : h('div', { class: 'stack' }, h('p', {}, 'Optional. A Google service account key avoids sign-in screens, but each client must share access with it.'), h('p', { class: 'muted' }, 'On the server: bash /root/agencyos/deploy/set-google-key.sh /root/key.json')));
   return h('section', { class: 'panel' },
-    h('div', { class: 'panel-head' }, h('h2', {}, 'Google'), status.configured ? pill('gs', 'active', 'Set up') : pill('gs', 'dropped', 'Not set up')),
-    status.configured
-      ? h('div', { class: 'stack' }, h('p', {}, 'Share each client\'s Search Console and Analytics with this address as a read-only user, then connect the client on its page.'), h('div', { class: 'url-row' }, h('code', { class: 'code url' }, status.email || ''), copy))
-      : h('div', { class: 'stack' },
-        h('p', {}, 'Install a Google service account key on the server to fill results from Search Console and Analytics automatically.'),
-        h('ol', { class: 'steps' },
-          h('li', {}, 'In Google Cloud, make a project and turn on the Search Console API, Analytics Data API and Analytics Admin API.'),
-          h('li', {}, 'Create a service account and download its JSON key.'),
-          h('li', {}, 'Copy the key to the server and run: bash /root/agencyos/deploy/set-google-key.sh /root/key.json')),
-        h('p', { class: 'muted' }, 'The key is stored only on the server and is never shown here.')));
+    h('div', { class: 'panel-head' }, h('h2', {}, 'Google'), add),
+    error,
+    status.accounts.length ? h('div', { class: 'list-inner' }, accountRows) : null,
+    !status.signIn.configured && !status.accounts.length ? setupSteps : null,
+    status.signIn.configured && !status.accounts.length ? h('p', { class: 'muted' }, 'No Google account is connected yet.') : null,
+    service);
 }
 
 export async function settingsView(session, { refresh, rerender }) {
@@ -51,7 +72,7 @@ export async function settingsView(session, { refresh, rerender }) {
   const notice = h('div', { class: 'notice', role: 'status' });
   const save = h('button', { class: 'btn btn-primary', type: 'submit' }, 'Save');
   const services = session.can['services.manage'] ? await servicesPanel(rerender) : null;
-  const google = session.can['services.manage'] ? await googleSettings() : null;
+  const google = session.can['services.manage'] ? await googleSettings(rerender) : null;
   return h('div', { class: 'page narrow' },
     h('div', { class: 'page-head' }, h('h1', { class: 'page-title' }, 'Settings')),
     h('form', { class: 'panel', onsubmit: async (e) => {

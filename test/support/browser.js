@@ -8,7 +8,7 @@ const { JSDOM } = require('jsdom');
 const PUBLIC = path.resolve(__dirname, '..', '..', 'public');
 
 const ROLES = ['owner', 'admin', 'manager', 'employee', 'contractor'];
-const WORK = { 'integrations.manage': 1, 'results.view': 1, 'results.record': 1, 'reports.view': 1, 'reports.manage': 1, 'reports.approve': 1, 'services.view': 1, 'sops.view': 1, 'sops.manage': 1, 'qa.review': 1, 'clients.view': 1, 'clients.manage': 1, 'projects.view': 1, 'projects.manage': 1, 'tasks.view': 1, 'tasks.manage': 1, 'tasks.work': 1, 'dashboard.agency': 1 };
+const WORK = { 'integrations.manage': 1, 'integrations.accounts': 1, 'results.view': 1, 'results.record': 1, 'reports.view': 1, 'reports.manage': 1, 'reports.approve': 1, 'services.view': 1, 'sops.view': 1, 'sops.manage': 1, 'qa.review': 1, 'clients.view': 1, 'clients.manage': 1, 'projects.view': 1, 'projects.manage': 1, 'tasks.view': 1, 'tasks.manage': 1, 'tasks.work': 1, 'dashboard.agency': 1 };
 const CAN = {
   owner: { 'services.manage': 1, 'org.view': 1, 'org.update': 1, 'members.list': 1, 'members.create': 1, 'members.manage': 1, 'profile.edit_others': 1, 'profile.edit_self': 1, 'activity.view': 1, 'dashboard.team': 1, 'ai.use': 1, 'ai.manage': 1, 'ai.approve': 1, ...WORK },
   manager: { 'ai.use': 1, 'org.view': 1, 'members.list': 1, 'profile.edit_self': 1, 'dashboard.team': 1, ...WORK },
@@ -92,10 +92,17 @@ function answers(role, { mustChange = false, empty = false } = {}) {
     ];
     if (pathname === '/clients/1/metrics' && method === 'GET') return can['results.view'] ? METRICS : { __status: 403, error: 'Not allowed' };
     if (pathname === '/clients/1/results' && method === 'GET') return url.includes('Search%20clicks') ? [{ source: 'gsc', id: 20, clientId: 1, metric: 'Search clicks', value: 90, unit: '', recordedOn: '2026-09-30', goalId: null, goalTitle: null, note: 'Google Search Console, Sep 2026', recordedById: null, recordedByName: null }] : RESULT_ROWS;
-    if (pathname === '/integrations/google' && method === 'GET') return { configured: true, email: can['integrations.manage'] ? 'agencyos@project.iam.gserviceaccount.com' : null };
+    const SERVICE_EMAIL = 'agencyos@project.iam.gserviceaccount.com';
+    if (pathname === '/integrations/google' && method === 'GET') return { configured: true, email: can['integrations.manage'] ? SERVICE_EMAIL : null, serviceAccount: { configured: true, email: can['integrations.manage'] ? SERVICE_EMAIL : null }, signIn: { configured: true }, accounts: can['integrations.manage'] ? [{ id: 7, email: 'josh@example.com', status: 'ok', clients: 1, connectedByName: 'Josh Nunez' }, { id: 8, email: 'old@example.com', status: 'needs_reconnect', clients: 0, connectedByName: 'Josh Nunez' }] : [], canManageAccounts: !!can['integrations.accounts'] };
+    if (pathname === '/integrations/google/choices' && method === 'GET') return [
+      { source: '7', label: 'josh@example.com', kind: 'account', status: 'ok', sites: [{ siteUrl: 'sc-domain:acme.example', permissionLevel: 'siteOwner' }, { siteUrl: 'https://beta.example/', permissionLevel: 'siteFullUser' }], properties: [{ id: '111', name: 'Acme site', account: 'Acme' }, { id: '222', name: 'Beta site', account: 'Beta' }], problems: [] },
+      { source: 'service', label: `Service account (${SERVICE_EMAIL})`, kind: 'service', status: 'ok', sites: [], properties: [], problems: ['Search Console: Google refused access. Add the service account as a read-only user (a viewer) for this property'] },
+    ];
+    if (pathname === '/integrations/google/accounts/start' && method === 'POST') return { url: 'https://accounts.google.com/o/oauth2/v2/auth?state=abc' };
+    if (/^\/integrations\/google\/accounts\/\d+$/.test(pathname) && method === 'DELETE') return { email: 'josh@example.com', disconnected: 1 };
     if (pathname === '/integrations/google/available' && method === 'GET') return { sites: [{ siteUrl: 'sc-domain:acme.example', permissionLevel: 'siteRestrictedUser' }], properties: [{ id: '111', name: 'Acme site', account: 'Acme' }] };
     if (pathname === '/clients/1/google' && method === 'GET') return google.link;
-    if (pathname === '/clients/1/google' && method === 'PUT') { google.link = { gscSiteUrl: body.gscSiteUrl, ga4PropertyId: body.ga4PropertyId, connectedAt: NOW, connectedByName: 'Josh Nunez', lastSyncAt: NOW, lastSyncStatus: 'partial', lastSyncError: 'Google Analytics: Google refused access. Add agencyos@project.iam.gserviceaccount.com as a read-only user (a viewer) for this property' }; return { link: google.link, sync: { status: 'partial', months: 12, recorded: 48, errors: [] } }; }
+    if (pathname === '/clients/1/google' && method === 'PUT') { google.link = { source: body.source, accountEmail: body.source === '7' ? 'josh@example.com' : null, gscSiteUrl: body.gscSiteUrl, ga4PropertyId: body.ga4PropertyId, connectedAt: NOW, connectedByName: 'Josh Nunez', lastSyncAt: NOW, lastSyncStatus: 'partial', lastSyncError: 'Google Analytics: Google refused access. Add agencyos@project.iam.gserviceaccount.com as a read-only user (a viewer) for this property' }; return { link: google.link, sync: { status: 'partial', months: 12, recorded: 48, errors: [] } }; }
     if (pathname === '/clients/1/google/sync' && method === 'POST') return { status: 'ok', months: 12, recorded: 96, errors: [] };
     if (pathname === '/clients/1/google' && method === 'DELETE') { google.link = null; return { ok: true }; }
     if (pathname === '/clients/1/reports/generate' && method === 'POST') return { ...REPORT_LIST[0], id: 3, sections: SECTION_TEXT };

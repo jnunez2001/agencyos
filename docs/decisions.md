@@ -78,3 +78,9 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 - Google Search Console and Analytics (GA4) numbers are pulled with a Google service account (a read-only robot identity), not "Sign in with Google", so access never expires. Monthly numbers for completed months are recorded as results with a source, first 12 months on connect and the last 2 months refreshed daily. The key is a root-only file on the server, installed with `deploy/set-google-key.sh`. Spec: `docs/specs/2026-10-06-phase-7-google-data.md`.
 - Synced results cannot be edited by hand; hand-typed results are never touched.
 - ChatGPT can connect as a custom MCP server: its two redirect addresses are accepted, the sign-in answers carry the issuer (RFC 9207), the resource may name the site or the /mcp address, and tools declare their OAuth scheme. Found from OpenAI's documentation after a "settings were rejected" error.
+
+## 2026-10-06: Google accounts (sign in with Google)
+
+- Josh wanted the OpenSEO-style flow: connect his own Google account once and pick from every site and property it can see. Added next to the service account, which stays as an option. Spec: `docs/specs/2026-10-06-phase-7b-google-accounts.md`.
+- Needs a Google OAuth client from his own Google Cloud project (id and secret installed with `deploy/set-google-oauth.sh`). Publish the consent screen to production, or Google expires the sign-in every 7 days; the unverified-app warning is clicked through once.
+- Refresh tokens are stored encrypted (AES-256-GCM) with a key file beside the database, so a database copy or backup alone cannot reveal them. Only read-only scopes are requested. Owner and Admin add and remove accounts; Managers and above connect clients through them.
