@@ -50,6 +50,10 @@ const ACTIONS = {
   // Reviewing work in QA is a human decision by a manager or above.
   'qa.review': MANAGERS,
   // Everyone connects their own AI as themselves. Owner and Admin also see and decide everyone's.
+  // The agency calendar. Everyone sees it (a Contractor only their own). Managers run it; anyone may block their own time.
+  'events.view': ALL,
+  'events.manage': MANAGERS,
+  'events.own': ALL,
   'ai.use': ALL,
   'ai.manage': OWNER_ADMIN,
   'ai.approve': OWNER_ADMIN,

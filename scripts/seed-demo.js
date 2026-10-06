@@ -15,6 +15,7 @@ const services = require('../server/services/services');
 const goals = require('../server/services/goals');
 const results = require('../server/services/results');
 const reports = require('../server/services/reports');
+const events = require('../server/services/events');
 const { todayIn, addDays } = require('../server/services/dates');
 
 const PASSWORD = 'demo-password-123';
@@ -82,6 +83,13 @@ const PASSWORD = 'demo-password-123';
   T(seo, 'Monthly report template', { priority: 'low' });
   T(shop, 'Product list from client', { assigneeId: id('rayne'), dueDate: day(8), estimateHours: 2 });
   T(shop, 'Payment provider options', { assigneeId: id('mark'), dueDate: day(12), estimateHours: 5 });
+  // The calendar: a client meeting, a team meeting, a review, an all-day training and blocked time.
+  const at = (offset, hhmm) => `${day(offset)}T${hhmm}:00Z`;
+  events.createEvent(db, owner, { title: 'Acme monthly check-in', type: 'client_meeting', startsAt: at(1, '14:00'), endsAt: at(1, '15:00'), clientId: acme.id, location: 'Zoom', attendees: [id('mark'), id('sarah')] });
+  events.createEvent(db, owner, { title: 'Team sync', type: 'team_meeting', startsAt: at(2, '09:00'), endsAt: at(2, '09:30'), attendees: [id('rayne'), id('mark'), id('sarah')] });
+  events.createEvent(db, owner, { title: 'Citation clean-up review', type: 'review', startsAt: at(5, '16:00'), endsAt: at(5, '16:45'), attendees: [id('mark')] });
+  events.createEvent(db, owner, { title: 'SEO training day', type: 'training', allDay: true, startsAt: day(8), endsAt: day(9), attendees: [id('sarah')] });
+  events.createEvent(db, { organizationId: a.organizationId, actor: { id: id('sarah'), role: 'employee' }, ip: '127.0.0.1', source: 'system' }, { title: 'Focus time', type: 'blocked_time', startsAt: at(3, '13:00'), endsAt: at(3, '16:00') });
   // Recorded results and a generated report for last month.
   const sarah = { organizationId: a.organizationId, actor: { id: id('sarah'), role: 'employee' }, ip: '127.0.0.1', source: 'system' };
   const rec = (metric, value, unit, daysAgo, goalId) => results.recordResult(db, sarah, acme.id, { metric, value, unit, recordedOn: day(-daysAgo), goalId });

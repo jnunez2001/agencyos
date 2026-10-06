@@ -11,6 +11,7 @@ const activity = require('../services/activity');
 const dashboard = require('../services/dashboard');
 const clients = require('../services/clients');
 const projects = require('../services/projects');
+const events = require('../services/events');
 const tasks = require('../services/tasks');
 const apikeys = require('../services/apikeys');
 const aiplans = require('../services/aiplans');
@@ -152,6 +153,12 @@ module.exports = function apiRouter(db, { google = null } = {}) {
 
   r.get('/projects', (req, res) => res.json(projects.listProjects(db, ctxOf(req), { clientId: req.query.clientId, status: req.query.status })));
   r.post('/projects', (req, res) => res.json(projects.createProject(db, ctxOf(req), req.body)));
+  // ---- calendar ----
+  r.get('/calendar', (req, res) => res.json(events.calendar(db, ctxOf(req), { from: req.query.from, to: req.query.to, clientId: req.query.clientId, userId: req.query.userId, includeCancelled: req.query.cancelled === '1' })));
+  r.post('/events', (req, res) => res.json(events.createEvent(db, ctxOf(req), req.body)));
+  r.get('/events/:id', (req, res) => res.json(events.getEvent(db, ctxOf(req), idParam(req))));
+  r.patch('/events/:id', (req, res) => res.json(events.updateEvent(db, ctxOf(req), idParam(req), req.body)));
+  r.delete('/events/:id', (req, res) => res.json(events.deleteEvent(db, ctxOf(req), idParam(req))));
   r.get('/projects/:id', (req, res) => res.json(projects.getProject(db, ctxOf(req), idParam(req))));
   r.patch('/projects/:id', (req, res) => res.json(projects.updateProject(db, ctxOf(req), idParam(req), req.body)));
 

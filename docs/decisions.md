@@ -103,3 +103,11 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 
 - An Owner can switch on "Require Google sign-in" in Settings, Security. Non-Owners are then refused a correct password, and Owners keep theirs as the way back in. Spec: `docs/specs/2026-10-06-phase-8b-require-google.md`.
 - It cannot be switched on unless every active non-Owner is linked or invited, and while on: new non-Owners need a Google email, non-Owners cannot unlink Google, an Owner cannot be demoted without a Google link, and an Owner cannot turn off their own password.
+
+## 2026-10-06: Calendar (roadmap step 1)
+
+- Built the agency calendar first because meetings, requests, follow-ups and time tracking all link to it. Spec: `docs/specs/2026-10-06-phase-9-calendar.md`.
+- Times are stored in UTC and shown in each browser's time zone. All-day events store dates. Recurring events are left for later.
+- Task and project due dates are shown as read-only deadlines, never copied into events.
+- Employees and Contractors may block their own time only. Managers and above run the rest. AI can read, schedule and change events through plans (ask first by default) and can never delete.
+- Roadmap order after this: meeting notes, requests, decisions, follow-ups, role workspaces, time tracking, capacity, retainers, SOP change requests, notifications, AI meeting intelligence.

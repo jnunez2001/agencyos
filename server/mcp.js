@@ -6,6 +6,7 @@ const plans = require('./services/aiplans');
 const clients = require('./services/clients');
 const projects = require('./services/projects');
 const tasks = require('./services/tasks');
+const events = require('./services/events');
 const members = require('./services/members');
 const dashboard = require('./services/dashboard');
 const sops = require('./services/sops');
@@ -30,6 +31,9 @@ const CLIENT_FIELDS = { name: str('Client name'), status: { type: 'string', enum
 const PROJECT_FIELDS = { serviceId: num('Service id'), goalId: num('A goal of the same client'), name: str('Project name'), description: str('Description'), status: { type: 'string', enum: ['planning', 'active', 'on_hold', 'completed', 'archived'] }, startDate: str('YYYY-MM-DD'), dueDate: str('YYYY-MM-DD'), managerId: num('Team member id') };
 const TASK_FIELDS = { goalId: num('A goal of the same client'), sopId: num('SOP to follow (testing or approved)'), qaRequired: { type: 'boolean' }, title: str('Task title'), description: str('Description'), status: { type: 'string', enum: ['todo', 'in_progress', 'review', 'done'] }, priority: { type: 'string', enum: ['low', 'normal', 'high', 'urgent'] }, assigneeId: num('Team member id'), dueDate: str('YYYY-MM-DD'), estimateHours: { type: 'number' } };
 
+const EVENT_TYPES = ['client_meeting', 'internal_meeting', 'team_meeting', 'deadline', 'follow_up', 'review', 'sop_review', 'training', 'blocked_time'];
+const EVENT_FIELDS = { title: str('Event title'), type: { type: 'string', enum: EVENT_TYPES }, startsAt: str('Start in UTC like 2026-10-12T14:00:00Z, or a date YYYY-MM-DD when allDay'), endsAt: str('End, same format as startsAt'), allDay: { type: 'boolean' }, location: str('Location or meeting link'), notes: str('Notes'), status: { type: 'string', enum: ['scheduled', 'completed', 'cancelled'] }, clientId: num('Client id'), projectId: num('Project id'), taskId: num('Task id (sets its project and client)'), attendees: { type: 'array', items: { type: 'integer' }, description: 'Team member ids' } };
+
 const PLAN_NOTE = ' With a key that asks first, the change waits in the AI inbox until a person approves it.';
 const asPlan = (summary, action, args) => ({ summary, steps: [{ action, args }] });
 const text = (value) => (typeof value === 'string' ? value : JSON.stringify(value));
@@ -43,6 +47,8 @@ const TOOLS = [
   { name: 'list_tasks', description: 'List tasks. Filters: projectId, assigneeId, status, overdue, mine, q (search in the title).', schema: obj({ projectId: num('Project id'), assigneeId: num('Team member id'), status: str('todo, in_progress, review or done'), overdue: { type: 'boolean' }, mine: { type: 'boolean', description: 'Only tasks assigned to the key owner' }, q: str('Search text') }),
     run: (db, ctx, a) => tasks.listTasks(db, ctx, { ...a, overdue: a.overdue ? '1' : '', mine: a.mine ? '1' : '' }) },
   { name: 'get_task', description: 'One task with its comments.', schema: obj({ id: num('Task id') }, ['id']), run: (db, ctx, a) => ({ ...tasks.getTask(db, ctx, a.id), comments: tasks.listComments(db, ctx, a.id) }) },
+  { name: 'list_events', description: 'The calendar between two dates: events (meetings, deadlines, reviews, blocked time and so on) plus task and project due dates as deadlines. Optional clientId and userId (what that person attends or is assigned). Times are UTC.', schema: obj({ from: str('YYYY-MM-DD'), to: str('YYYY-MM-DD, at most 120 days after from'), clientId: num('Client id'), userId: num('Team member id'), includeCancelled: { type: 'boolean' } }, ['from', 'to']), run: (db, ctx, a) => events.calendar(db, ctx, a) },
+  { name: 'get_event', description: 'One calendar event with its attendees and links.', schema: obj({ id: num('Event id') }, ['id']), run: (db, ctx, a) => events.getEvent(db, ctx, a.id) },
   { name: 'list_team', description: 'The people in the agency with their ids, roles and job titles. Use the ids to assign work.', schema: obj(),
     run: (db, ctx) => members.listMembers(db, ctx).map((m) => ({ id: m.id, username: m.username, displayName: m.displayName, role: m.role, isActive: m.isActive, jobTitle: m.jobTitle, department: m.department })) },
   { name: 'get_workload', description: 'Each active person\'s open tasks, overdue tasks and open estimated hours against weekly capacity.', schema: obj(),
@@ -73,6 +79,8 @@ const TOOLS = [
   { name: 'create_tasks_from_sop', write: true, description: `Start work from an SOP in a project: one task named after it, or one task per step (mode steps).${PLAN_NOTE}`, schema: obj({ sopId: num('SOP id'), projectId: num('Project id'), mode: { type: 'string', enum: ['task', 'steps'] }, assigneeId: num('Team member id'), dueDate: str('YYYY-MM-DD'), priority: { type: 'string', enum: ['low', 'normal', 'high', 'urgent'] } }, ['sopId', 'projectId']), submit: (a) => asPlan('Create tasks from an SOP', 'create_tasks_from_sop', a) },
   { name: 'create_task', write: true, description: `Add a task to a project.${PLAN_NOTE}`, schema: obj({ projectId: num('Project id'), ...TASK_FIELDS }, ['projectId', 'title']), submit: (a) => asPlan(`Create task "${a.title}"`, 'create_task', a) },
   { name: 'update_task', write: true, description: `Change a task (status, assignee, due date and so on).${PLAN_NOTE}`, schema: obj({ id: num('Task id'), ...TASK_FIELDS }, ['id']), submit: (a) => asPlan(`Change task #${a.id}`, 'update_task', a) },
+  { name: 'create_event', write: true, description: `Schedule a calendar event.${PLAN_NOTE}`, schema: obj(EVENT_FIELDS, ['title', 'startsAt']), submit: (a) => asPlan(`Schedule "${a.title}"`, 'create_event', a) },
+  { name: 'update_event', write: true, description: `Change a calendar event, including cancelling it. AI cannot delete events.${PLAN_NOTE}`, schema: obj({ id: num('Event id'), ...EVENT_FIELDS }, ['id']), submit: (a) => asPlan(`Change event #${a.id}`, 'update_event', a) },
   { name: 'add_comment', write: true, description: `Comment on a task.${PLAN_NOTE}`, schema: obj({ taskId: num('Task id'), body: str('The comment') }, ['taskId', 'body']), submit: (a) => asPlan(`Comment on task #${a.taskId}`, 'add_comment', a) },
 ];
 
