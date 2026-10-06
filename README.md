@@ -39,3 +39,7 @@ Plain Node 22 or newer, Express, SQLite and plain JavaScript pages with no build
 - Private repository. Never commit secrets, API keys or data files.
 - Separate from Family Money OS and StarkFi. Nothing here touches them.
 - Set `SETUP_TOKEN` before the server is reachable from the internet, so a stranger cannot claim a fresh agency.
+
+## Deploying to a small server
+
+`deploy/push.sh root@SERVER` runs the tests, copies the code and installs a systemd service that listens on 127.0.0.1:3200 only, with a 192 MB memory cap. Put it on the web with a Cloudflare Tunnel hostname that points at that port. Run `deploy/set-setup-token.sh` on the server before it is reachable. Nothing here touches other apps on the server.

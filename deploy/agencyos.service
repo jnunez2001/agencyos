@@ -1,0 +1,33 @@
+# Joshua Nunez
+# UNTESTED on the real server.
+[Unit]
+Description=AgencyOS
+After=network.target
+
+[Service]
+Type=simple
+User=agencyos
+Group=agencyos
+WorkingDirectory=/opt/agencyos
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=3200
+Environment=DATA_DIR=/var/lib/agencyos
+Environment=COOKIE_SECURE=1
+Environment=SESSION_DAYS=14
+# The setup code (SETUP_TOKEN) lives here, readable by root only. Created by deploy/set-setup-token.sh.
+EnvironmentFile=-/etc/agencyos.env
+ExecStart=/usr/bin/env node server/index.js
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/agencyos
+# Measured on a Mac: about 60 MB idle and about 100 to 135 MB under a synthetic burst. The cap keeps a
+# runaway AgencyOS from taking the other apps on this small server down with it.
+MemoryMax=192M
+
+[Install]
+WantedBy=multi-user.target
