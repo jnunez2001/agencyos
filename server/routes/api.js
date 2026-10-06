@@ -19,6 +19,8 @@ const sops = require('../services/sops');
 const qa = require('../services/qa');
 const services = require('../services/services');
 const goals = require('../services/goals');
+const results = require('../services/results');
+const reports = require('../services/reports');
 const { ServiceError } = require('../services/errors');
 
 function idParam(req) {
@@ -102,6 +104,20 @@ module.exports = function apiRouter(db) {
   r.delete('/tasks/:id', (req, res) => res.json(tasks.deleteTask(db, ctxOf(req), idParam(req))));
   r.get('/tasks/:id/comments', (req, res) => res.json(tasks.listComments(db, ctxOf(req), idParam(req))));
   r.post('/tasks/:id/comments', (req, res) => res.json(tasks.addComment(db, ctxOf(req), idParam(req), req.body)));
+
+  r.get('/clients/:id/results', (req, res) => res.json(results.listResults(db, ctxOf(req), idParam(req), { metric: req.query.metric, from: req.query.from, to: req.query.to })));
+  r.get('/clients/:id/metrics', (req, res) => res.json(results.metricsSummary(db, ctxOf(req), idParam(req))));
+  r.post('/clients/:id/results', (req, res) => res.json(results.recordResult(db, ctxOf(req), idParam(req), req.body)));
+  r.patch('/results/:id', (req, res) => res.json(results.updateResult(db, ctxOf(req), idParam(req), req.body)));
+  r.delete('/results/:id', (req, res) => res.json(results.deleteResult(db, ctxOf(req), idParam(req))));
+  r.get('/clients/:id/report-data', (req, res) => res.json(reports.reportData(db, ctxOf(req), idParam(req), { from: req.query.from, to: req.query.to })));
+  r.post('/clients/:id/reports/generate', (req, res) => res.json(reports.generateReport(db, ctxOf(req), idParam(req), req.body)));
+  r.get('/reports', (req, res) => res.json(reports.listReports(db, ctxOf(req), { clientId: req.query.clientId, status: req.query.status })));
+  r.post('/reports', (req, res) => res.json(reports.createReport(db, ctxOf(req), req.body)));
+  r.get('/reports/:id', (req, res) => res.json(reports.getReport(db, ctxOf(req), idParam(req))));
+  r.patch('/reports/:id', (req, res) => res.json(reports.updateReport(db, ctxOf(req), idParam(req), req.body)));
+  r.post('/reports/:id/approve', (req, res) => res.json(reports.approveReport(db, ctxOf(req), idParam(req))));
+  r.delete('/reports/:id', (req, res) => res.json(reports.deleteReport(db, ctxOf(req), idParam(req))));
 
   r.get('/services', (req, res) => res.json(services.listServices(db, ctxOf(req), { all: req.query.all === '1' })));
   r.post('/services', (req, res) => res.json(services.createService(db, ctxOf(req), req.body)));

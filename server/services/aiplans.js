@@ -11,6 +11,8 @@ const projects = require('./projects');
 const tasks = require('./tasks');
 const sops = require('./sops');
 const goals = require('./goals');
+const results = require('./results');
+const reports = require('./reports');
 
 const MAX_STEPS = 50;
 const REF_KEYS = ['clientId', 'projectId', 'taskId', 'sopId', 'goalId', 'id'];
@@ -28,6 +30,10 @@ const ACTIONS = {
   create_task: (db, ctx, a) => tasks.createTask(db, ctx, a),
   update_task: (db, ctx, a) => withId(a, (id, rest) => tasks.updateTask(db, ctx, id, rest)),
   add_comment: (db, ctx, a) => { const { taskId, ...rest } = a; return tasks.addComment(db, ctx, taskId, rest); },
+  record_result: (db, ctx, a) => { const { clientId, ...rest } = a; const r = results.recordResult(db, ctx, clientId, rest); return { id: r.id, name: `${r.metric}: ${r.value}` }; },
+  create_report: (db, ctx, a) => reports.createReport(db, ctx, a),
+  update_report: (db, ctx, a) => withId(a, (id, rest) => reports.updateReport(db, ctx, id, rest)),
+  generate_report: (db, ctx, a) => { const { clientId, ...rest } = a; return reports.generateReport(db, ctx, clientId, rest); },
   create_goal: (db, ctx, a) => { const { clientId, ...rest } = a; return goals.createGoal(db, ctx, clientId, rest); },
   update_goal: (db, ctx, a) => withId(a, (id, rest) => goals.updateGoal(db, ctx, id, rest)),
   create_sop: (db, ctx, a) => sops.createSop(db, ctx, a),
@@ -124,6 +130,10 @@ function describe(db, organizationId, steps) {
       case 'update_project': line = `Change project ${nameOf('projects', 'name', a.id)}: ${changed}`; break;
       case 'create_task': line = `Create task "${a.title}" in ${nameOf('projects', 'name', a.projectId)}`; break;
       case 'update_task': line = `Change task ${nameOf('tasks', 'title', a.id)}: ${changed}`; break;
+      case 'record_result': line = `Record ${a.metric} = ${a.value}${a.unit ? ` ${a.unit}` : ''} for ${nameOf('clients', 'name', a.clientId)}${a.recordedOn ? ` (${a.recordedOn})` : ''}`; break;
+      case 'create_report': line = `Create report "${a.title}" for ${nameOf('clients', 'name', a.clientId)}`; break;
+      case 'update_report': line = `Change report ${nameOf('reports', 'title', a.id)}: ${changed}`; break;
+      case 'generate_report': line = `Generate a report for ${nameOf('clients', 'name', a.clientId)} (${a.periodStart} to ${a.periodEnd})`; break;
       case 'create_goal': line = `Add goal "${a.title}" for ${nameOf('clients', 'name', a.clientId)}`; break;
       case 'update_goal': line = `Change goal ${nameOf('client_goals', 'title', a.id)}: ${changed}`; break;
       case 'create_sop': line = `Create SOP "${a.title}"${a.status ? ` (${a.status})` : ''}`; break;

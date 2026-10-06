@@ -285,3 +285,33 @@ test('goal actions: an AI sets up a client with goals and links work to them', a
   const p = plans.submitPlan(f.db, ask, { summary: 'A goal', steps: [{ action: 'create_goal', args: { clientId: client.id, title: 'Improve reviews' } }, { action: 'update_goal', args: { id: g.id, status: 'achieved' } }] });
   assert.deepEqual(p.lines, ['Add goal "Improve reviews" for "Cedar"', 'Change goal "Increase qualified organic leads": status']);
 });
+
+test('result and report actions: an AI records results and drafts a report, but only a person approves it', async () => {
+  const f = await fixture();
+  const reportsSvc = require('../server/services/reports');
+  const resultsSvc = require('../server/services/results');
+  const { auth } = keyFor(f, f.josh, 'direct');
+  const r = plans.submitPlan(f.db, auth, { summary: 'Record results and draft the report', steps: [
+    { action: 'create_client', as: 'c', args: { name: 'Acme' } },
+    { action: 'record_result', args: { clientId: '$c', metric: 'Organic leads', value: 40, unit: 'leads', recordedOn: '2026-08-31' } },
+    { action: 'record_result', args: { clientId: '$c', metric: 'Organic leads', value: 55, unit: 'leads', recordedOn: '2026-09-30' } },
+    { action: 'generate_report', as: 'rep', args: { clientId: '$c', periodStart: '2026-09-01', periodEnd: '2026-09-30' } },
+    { action: 'update_report', args: { id: '$rep', executiveSummary: 'Leads grew 37.5 percent.', recommendations: 'Keep publishing service pages.' } },
+  ] });
+  assert.equal(r.status, 'applied');
+  const client = clients.listClients(f.db, f.josh)[0];
+  assert.equal(resultsSvc.listResults(f.db, f.josh, client.id).length, 2);
+  const rep = reportsSvc.getReport(f.db, f.josh, reportsSvc.listReports(f.db, f.josh)[0].id);
+  assert.deepEqual([rep.status, rep.sections.executiveSummary, rep.sections.recommendations], ['draft', 'Leads grew 37.5 percent.', 'Keep publishing service pages.']);
+  assert.match(rep.sections.keyResults, /Organic leads: 55 leads \(up 15 from 40\)/);
+  assert.throws(() => reportsSvc.approveReport(f.db, { ...f.josh, source: 'ai' }, rep.id), /person/i);
+  assert.throws(() => plans.submitPlan(f.db, auth, { summary: 's', steps: [{ action: 'approve_report', args: { id: rep.id } }] }), /unknown action/i);
+  const { auth: ask } = keyFor(f, f.josh, 'propose');
+  const p = plans.submitPlan(f.db, ask, { summary: 'More', steps: [
+    { action: 'record_result', args: { clientId: client.id, metric: 'Calls', value: 12, recordedOn: '2026-09-30' } },
+    { action: 'create_report', args: { clientId: client.id, title: 'Special report', periodStart: '2026-09-01', periodEnd: '2026-09-30' } },
+    { action: 'update_report', args: { id: rep.id, recommendations: 'New idea' } },
+    { action: 'generate_report', args: { clientId: client.id, periodStart: '2026-08-01', periodEnd: '2026-08-31' } },
+  ] });
+  assert.deepEqual(p.lines, ['Record Calls = 12 for "Acme" (2026-09-30)', 'Create report "Special report" for "Acme"', 'Change report "Acme report, Sep 1, 2026 to Sep 30, 2026": recommendations', 'Generate a report for "Acme" (2026-08-01 to 2026-08-31)']);
+});

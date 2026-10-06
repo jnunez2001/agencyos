@@ -68,7 +68,7 @@ test('tools/list shows write tools only to keys that can write', async () => {
   const app = await setUp();
   const names = async (access) => (await mcp(app, (await withKey(app, access, access)).token).rpc('tools/list')).result.tools.map((t) => t.name);
   const read = await names('read');
-  assert.deepEqual(read, ['list_clients', 'get_client', 'list_projects', 'get_project', 'list_tasks', 'get_task', 'list_team', 'get_workload', 'list_sops', 'get_sop', 'list_services', 'list_goals', 'list_qa_queue']);
+  assert.deepEqual(read, ['list_clients', 'get_client', 'list_projects', 'get_project', 'list_tasks', 'get_task', 'list_team', 'get_workload', 'list_sops', 'get_sop', 'list_services', 'list_goals', 'get_metrics', 'list_results', 'get_report_data', 'list_reports', 'get_report', 'list_qa_queue']);
   const propose = await names('propose');
   assert.deepEqual(propose.slice(0, read.length), read);
   assert.ok(['apply_changes', 'create_client', 'create_project', 'create_task', 'update_task', 'add_comment'].every((n) => propose.includes(n)));
@@ -219,5 +219,31 @@ test('service and goal tools: read for every key, goals through plans', async ()
   assert.deepEqual([goals[0].title, goals[0].serviceName, goals[0].status], ['Increase leads', 'SEO', 'active']);
   assert.equal((await read.tool('get_client', { id: client.id })).data.goals.length, 1);
   assert.equal((await read.tool('create_goal', { clientId: client.id, title: 'x' })).isError, true);
+  await app.close();
+});
+
+test('result and report tools: read for every key, drafting through plans, never approving', async () => {
+  const app = await setUp();
+  const direct = mcp(app, (await withKey(app, 'direct', 'd')).token);
+  const read = mcp(app, (await withKey(app, 'read', 'r')).token);
+  assert.equal((await direct.tool('create_client', { name: 'Acme' })).data.status, 'applied');
+  const client = (await read.tool('list_clients')).data[0];
+  for (const [value, recordedOn] of [[40, '2026-08-31'], [55, '2026-09-30']]) assert.equal((await direct.tool('record_result', { clientId: client.id, metric: 'Organic leads', value, unit: 'leads', recordedOn })).data.status, 'applied');
+  const metrics = (await read.tool('get_metrics', { clientId: client.id })).data;
+  assert.deepEqual([metrics[0].metric, metrics[0].latest.value, metrics[0].change], ['Organic leads', 55, 15]);
+  assert.equal((await read.tool('list_results', { clientId: client.id, metric: 'organic leads' })).data.length, 2);
+  const facts = (await read.tool('get_report_data', { clientId: client.id, from: '2026-09-01', to: '2026-09-30' })).data;
+  assert.deepEqual([facts.client.name, facts.results[0].change, facts.completedTasks.length], ['Acme', 15, 0]);
+  assert.equal((await read.tool('get_report_data', { clientId: client.id, from: '2026-09-01' })).isError, true);
+  assert.equal((await direct.tool('generate_report', { clientId: client.id, periodStart: '2026-09-01', periodEnd: '2026-09-30' })).data.status, 'applied');
+  const list = (await read.tool('list_reports')).data;
+  assert.deepEqual([list.length, list[0].status], [1, 'draft']);
+  const created = await direct.tool('create_report', { clientId: client.id, title: 'Written by AI', periodStart: '2026-09-01', periodEnd: '2026-09-30', executiveSummary: 'Strong month.', recommendations: 'Keep going.' });
+  assert.equal(created.data.status, 'applied');
+  const mine = (await read.tool('list_reports', { status: 'draft' })).data.find((r) => r.title === 'Written by AI');
+  assert.equal((await read.tool('get_report', { id: mine.id })).data.sections.executiveSummary, 'Strong month.');
+  assert.equal((await read.tool('record_result', { clientId: client.id, metric: 'x', value: 1 })).isError, true);
+  assert.equal((await direct.tool('approve_report', { id: mine.id })).isError, true);
+  assert.equal((await app.owner.call('POST', `/reports/${mine.id}/approve`, {})).data.status, 'approved'); // a person can
   await app.close();
 });
