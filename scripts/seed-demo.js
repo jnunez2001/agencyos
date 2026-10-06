@@ -17,6 +17,8 @@ const results = require('../server/services/results');
 const reports = require('../server/services/reports');
 const events = require('../server/services/events');
 const meetingnotes = require('../server/services/meetingnotes');
+const time = require('../server/services/timeentries');
+const retainers = require('../server/services/retainers');
 const { todayIn, addDays } = require('../server/services/dates');
 
 const PASSWORD = 'demo-password-123';
@@ -92,6 +94,23 @@ const PASSWORD = 'demo-password-123';
   events.createEvent(db, owner, { title: 'Citation clean-up review', type: 'review', startsAt: at(5, '16:00'), endsAt: at(5, '16:45'), attendees: [id('mark')] });
   events.createEvent(db, owner, { title: 'SEO training day', type: 'training', allDay: true, startsAt: day(8), endsAt: day(9), attendees: [id('sarah')] });
   events.createEvent(db, { organizationId: a.organizationId, actor: { id: id('sarah'), role: 'employee' }, ip: '127.0.0.1', source: 'system' }, { title: 'Focus time', type: 'blocked_time', startsAt: at(3, '13:00'), endsAt: at(3, '16:00') });
+  // Time: a retainer for Acme, approved and waiting time this month, and a draft and a rejected entry.
+  const as = (user, role, extra) => ({ organizationId: a.organizationId, actor: { id: id(user), role }, ip: '127.0.0.1', source: 'system', ...extra });
+  const markCtx = as('mark', 'manager');
+  const sarahTime = as('sarah', 'employee');
+  const task = (title) => tasks.listTasks(db, owner, {}).find((t) => t.title === title);
+  retainers.saveRetainer(db, owner, acme.id, { hoursAllocated: 20, startDate: `${today.slice(0, 8)}01` });
+  const monthDay = (n) => `${today.slice(0, 8)}${String(Math.max(1, n)).padStart(2, '0')}`;
+  const logged = [['Keyword research', 240, monthDay(1), 'approved'], ['Citation clean-up', 360, monthDay(2), 'approved'], ['Claim Google Business Profile', 180, monthDay(3), 'approved'], ['Citation clean-up', 300, monthDay(4), 'submitted']];
+  for (const [title, minutes, date, status] of logged) {
+    const e = time.createEntry(db, sarahTime, { taskId: task(title).id, minutes, date, description: title });
+    time.submitEntries(db, sarahTime, { ids: [e.id] });
+    if (status === 'approved') time.approveEntry(db, markCtx, e.id);
+  }
+  time.createEntry(db, sarahTime, { minutes: 60, date: today, timeType: 'internal', description: 'Team sync' });
+  const bad = time.createEntry(db, sarahTime, { taskId: task('Keyword research').id, minutes: 45, date: today, description: 'Research' });
+  time.submitEntries(db, sarahTime, { ids: [bad.id] });
+  time.rejectEntry(db, markCtx, bad.id, { note: 'Please add which keywords' });
   // Recorded results and a generated report for last month.
   const sarah = { organizationId: a.organizationId, actor: { id: id('sarah'), role: 'employee' }, ip: '127.0.0.1', source: 'system' };
   const rec = (metric, value, unit, daysAgo, goalId) => results.recordResult(db, sarah, acme.id, { metric, value, unit, recordedOn: day(-daysAgo), goalId });

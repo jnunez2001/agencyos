@@ -45,6 +45,19 @@ const SENTENCE = {
   'sop.create': 'added an SOP',
   'sop.update': 'changed an SOP',
   'sop.version': 'added an SOP version',
+  'time.create': 'logged time',
+  'time.update': 'changed logged time',
+  'time.delete': 'deleted logged time',
+  'time.submit': 'submitted time for approval',
+  'time.approve': 'approved time',
+  'time.reject': 'rejected time',
+  'time.lock': 'locked time',
+  'time.timer.start': 'started a timer',
+  'time.timer.pause': 'paused a timer',
+  'time.timer.resume': 'resumed a timer',
+  'time.timer.stop': 'stopped a timer',
+  'retainer.create': 'set up a client retainer',
+  'retainer.update': 'changed a client retainer',
   'qa.submit': 'submitted a task for QA',
   'qa.approve': 'approved a task in QA',
   'qa.request_changes': 'requested changes in QA',
@@ -55,7 +68,7 @@ const SENTENCE = {
   'login.locked': 'was locked out after too many tries',
 };
 
-const FIELD = { role: 'Role', displayName: 'Name', isActive: 'Active', name: 'Name', timezone: 'Timezone', username: 'Username', jobTitle: 'Job title', department: 'Department', workDays: 'Working days', metric: 'Metric', value: 'Value', unit: 'Unit', recordedOn: 'Date', periodStart: 'Period start', periodEnd: 'Period end', executiveSummary: 'Executive summary', workCompleted: 'Work completed', keyResults: 'Key results', importantChanges: 'Important changes', problemsRisks: 'Problems and risks', nextPriorities: 'Next priorities', recommendations: 'Recommendations', services: 'Services', accountOwnerId: 'Account owner', goalId: 'Goal', why: 'Why', target: 'Target', requiresQa: 'Needs QA', qaRequired: 'Needs QA', sopId: 'SOP', version: 'Version', changeNote: 'Note', access: 'Access', title: 'Title', description: 'Description', status: 'Status', priority: 'Priority', dueDate: 'Due date', startDate: 'Start date', estimateHours: 'Estimate', website: 'Website', industry: 'Industry', notes: 'Notes', email: 'Email', phone: 'Phone', roleTitle: 'Role', isPrimary: 'Primary', assigneeId: 'Assignee', managerId: 'Manager', projectId: 'Project', clientId: 'Client', workStart: 'Start', workEnd: 'End', weeklyCapacityHours: 'Capacity' };
+const FIELD = { role: 'Role', displayName: 'Name', isActive: 'Active', name: 'Name', timezone: 'Timezone', username: 'Username', jobTitle: 'Job title', department: 'Department', workDays: 'Working days', metric: 'Metric', value: 'Value', unit: 'Unit', recordedOn: 'Date', periodStart: 'Period start', periodEnd: 'Period end', executiveSummary: 'Executive summary', workCompleted: 'Work completed', keyResults: 'Key results', importantChanges: 'Important changes', problemsRisks: 'Problems and risks', nextPriorities: 'Next priorities', recommendations: 'Recommendations', services: 'Services', accountOwnerId: 'Account owner', goalId: 'Goal', why: 'Why', target: 'Target', requiresQa: 'Needs QA', qaRequired: 'Needs QA', sopId: 'SOP', version: 'Version', changeNote: 'Note', access: 'Access', title: 'Title', description: 'Description', status: 'Status', priority: 'Priority', dueDate: 'Due date', startDate: 'Start date', estimateHours: 'Estimate', website: 'Website', industry: 'Industry', notes: 'Notes', email: 'Email', phone: 'Phone', roleTitle: 'Role', isPrimary: 'Primary', assigneeId: 'Assignee', managerId: 'Manager', projectId: 'Project', clientId: 'Client', workStart: 'Start', workEnd: 'End', weeklyCapacityHours: 'Capacity', minutes: 'Minutes', timeType: 'Type', reviewNote: 'Review note', hoursAllocated: 'Hours', timerState: 'Timer' };
 const show = (v) => (v == null ? 'none' : Array.isArray(v) ? v.join(', ') : typeof v === 'boolean' ? (v ? 'yes' : 'no') : String(v));
 
 const LONG = new Set(['description', 'notes', 'why', 'executiveSummary', 'workCompleted', 'keyResults', 'importantChanges', 'problemsRisks', 'nextPriorities', 'recommendations']); // long text and ids are not worth printing

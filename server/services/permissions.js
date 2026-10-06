@@ -66,6 +66,12 @@ const ACTIONS = {
   'followups.view': ALL,
   'followups.create': NOT_CONTRACTOR,
   'followups.manage': MANAGERS,
+  // Time tracking and client retainers. Everyone logs their own time; Managers review it and see the whole team's.
+  'time.log': ALL,
+  'time.review': MANAGERS,
+  'time.view_team': MANAGERS,
+  'retainers.view': NOT_CONTRACTOR,
+  'retainers.manage': MANAGERS,
   'ai.use': ALL,
   'ai.manage': OWNER_ADMIN,
   'ai.approve': OWNER_ADMIN,

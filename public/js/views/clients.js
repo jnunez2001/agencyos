@@ -194,13 +194,47 @@ function goalCard(session, clientId, g, rerender) {
     h('p', { class: 'muted' }, tasksTotal ? `${tasksDone} of ${tasksTotal} tasks done, ${projects} ${projects === 1 ? 'project' : 'projects'}` : `No work linked yet, ${projects} ${projects === 1 ? 'project' : 'projects'}`));
 }
 
+// ---- retainer ----
+
+function openRetainerForm(clientId, data, onChanged) {
+  const r = data.retainer;
+  openSheet(r ? 'Edit retainer' : 'Set up retainer', (close) => {
+    const hours = field('Hours each month', { name: 'hoursAllocated', type: 'number', min: 0.25, max: 10000, step: '0.25', required: true, value: r ? r.hoursAllocated : '' });
+    const start = field('Starts on', { name: 'startDate', type: 'date', required: true, value: r ? r.startDate : new Date().toISOString().slice(0, 10) });
+    const off = r ? confirmButton('Switch off', 'Click again to switch off', async () => { await api('PUT', `/clients/${clientId}/retainer`, { isActive: false }); close(); await onChanged(); }) : null;
+    return sheetForm([h('p', { class: 'muted' }, 'Each month runs from the start date\'s day. Only billable time that a manager has approved counts as used.'), hours, start], r ? 'Save' : 'Set up', async () => {
+      await api('PUT', `/clients/${clientId}/retainer`, { hoursAllocated: Number(hours.input.value), startDate: start.input.value });
+      await onChanged();
+    }, close, off);
+  });
+}
+
+// The hours this client has paid for, used so far this month, with a warning from 80 percent and over 100.
+function retainerPanel(session, clientId, data, rerender) {
+  const manage = data.canManage;
+  const u = data.usage;
+  const edit = manage && h('button', { class: 'btn-text', type: 'button', onclick: () => openRetainerForm(clientId, data, rerender) }, u ? 'Edit' : 'Set up retainer');
+  if (!u) return h('section', { class: 'panel' }, h('div', { class: 'panel-head' }, h('h2', {}, 'Retainer'), edit), h('p', { class: 'muted' }, 'No retainer. Set one up to track the hours this client has paid for.'));
+  const bar = h('span', { class: `bar-fill${u.level === 'over' ? ' over' : u.level === 'warning' ? ' warn' : ''}` });
+  bar.style.width = `${Math.min(100, u.percent)}%`; // from script, so the page's style rules stay strict
+  const figure = (value, label) => h('div', { class: 'figure' }, h('span', { class: 'figure-value' }, value), h('span', { class: 'figure-label' }, label));
+  return h('section', { class: 'panel' },
+    h('div', { class: 'panel-head' }, h('h2', {}, 'Retainer'), edit),
+    h('div', { class: 'row-between' }, h('span', { class: 'muted' }, `${formatDay(u.period.from)} to ${formatDay(u.period.to)}`), u.level !== 'ok' && pill('ret', u.level, u.level === 'over' ? 'Over the retainer' : 'Nearly used')),
+    h('div', { class: 'bar' }, bar),
+    h('div', { class: 'retainer-figures' }, figure(`${formatNumber(u.usedHours)} h`, `Used (${u.percent}%)`), figure(`${formatNumber(u.remainingHours)} h`, 'Remaining'), figure(`${formatNumber(u.allocatedHours)} h`, 'Allocated')),
+    u.message && h('p', { class: u.level === 'over' ? 'error' : 'muted' }, u.message),
+    u.pendingHours > 0 && h('p', { class: 'muted' }, `${formatNumber(u.pendingHours)} h more is waiting for approval and not counted yet.`));
+}
+
 async function clientPage(session, id, rerender) {
-  const [c, metrics, reports, googleStatus, googleLink] = await Promise.all([
+  const [c, metrics, reports, googleStatus, googleLink, retainer] = await Promise.all([
     api('GET', `/clients/${id}`),
     session.can['results.view'] ? api('GET', `/clients/${id}/metrics`) : [],
     session.can['reports.view'] ? api('GET', `/reports?clientId=${id}`) : [],
     session.can['results.view'] ? api('GET', '/integrations/google') : { configured: false },
     session.can['results.view'] ? api('GET', `/clients/${id}/google`) : null,
+    session.can['retainers.view'] ? api('GET', `/clients/${id}/retainer`) : null,
   ]);
   const manage = session.can['clients.manage'];
   const facts = h('dl', { class: 'facts' },
@@ -223,6 +257,7 @@ async function clientPage(session, id, rerender) {
         h('section', { class: 'panel' },
           h('div', { class: 'panel-head' }, h('h2', {}, 'Goals'), manage && h('button', { class: 'btn-text', type: 'button', onclick: () => openGoalForm(session, c.id, null, rerender).catch((e) => alert(e.message)) }, 'Add goal')),
           c.goals.length ? h('div', { class: 'goals' }, c.goals.map((g) => goalCard(session, c.id, g, rerender))) : h('p', { class: 'muted' }, 'No goals yet.')),
+        retainer && retainerPanel(session, c.id, retainer, rerender),
         session.can['results.view'] && h('section', { class: 'panel' },
           h('div', { class: 'panel-head' }, h('h2', {}, 'Results'), session.can['results.record'] && h('button', { class: 'btn-text', type: 'button', onclick: () => openResultForm(session, c.id, c.goals, {}, metrics, rerender) }, 'Record result')),
           metrics.length ? h('div', { class: 'metrics' }, metrics.map((m) => metricCard(session, c.id, m, c.goals, metrics, rerender))) : h('p', { class: 'muted' }, 'No results recorded yet.')),

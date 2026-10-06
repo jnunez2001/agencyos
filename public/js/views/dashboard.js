@@ -11,7 +11,7 @@ function loadBar(w) {
   const fill = h('span', { class: `bar-fill${w.openHours > w.capacityHours ? ' over' : ''}` });
   fill.style.width = `${pct}%`; // set from script, so the page's style rules stay strict
   return h('div', { class: 'load-row' },
-    h('div', { class: 'load-name' }, h('span', {}, w.displayName), h('span', { class: 'muted' }, `${w.openTasks} ${w.openTasks === 1 ? 'task' : 'tasks'}${w.overdue ? `, ${w.overdue} overdue` : ''}`)),
+    h('div', { class: 'load-name' }, h('span', {}, w.displayName), h('span', { class: w.capacityStatus === 'over' ? 'error' : 'muted' }, `${w.openTasks} ${w.openTasks === 1 ? 'task' : 'tasks'}${w.overdue ? `, ${w.overdue} overdue` : ''}${w.capacityStatus === 'over' ? `, over capacity this week (${w.utilizationPercent}%)` : w.capacityStatus === 'under' ? ', light week' : ''}`)),
     h('div', { class: 'bar' }, fill),
     h('span', { class: 'muted nowrap load-hours' }, `${w.openHours} of ${w.capacityHours} h`));
 }

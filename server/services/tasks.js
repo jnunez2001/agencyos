@@ -24,7 +24,8 @@ const SELECT = `
          t.due_date AS dueDate, t.estimate_hours AS estimateHours, t.completed_at AS completedAt,
          t.created_at AS createdAt, t.updated_at AS updatedAt,
          t.sop_id AS sopId, sp.title AS sopTitle, t.sop_version_id AS sopVersionId, sv.major AS sopMajor, sv.minor AS sopMinor, t.qa_required AS qaRequired,
-         t.goal_id AS goalId, COALESCE(tg.title, pg.title) AS goalTitle, (t.goal_id IS NULL AND p.goal_id IS NOT NULL) AS goalInherited, p.client_id AS projectClientId
+         t.goal_id AS goalId, COALESCE(tg.title, pg.title) AS goalTitle,
+         (SELECT COALESCE(SUM(te.minutes), 0) FROM time_entries te WHERE te.organization_id = t.organization_id AND te.task_id = t.id AND te.status != 'rejected') AS loggedMinutes, (t.goal_id IS NULL AND p.goal_id IS NOT NULL) AS goalInherited, p.client_id AS projectClientId
     FROM tasks t
     JOIN projects p ON p.id = t.project_id AND p.organization_id = t.organization_id
     JOIN clients c ON c.id = p.client_id AND c.organization_id = p.organization_id
@@ -37,9 +38,11 @@ const SELECT = `
 
 function shape(db, ctx, row, todayDate) {
   const manage = perms.can(ctx.actor.role, 'tasks.manage');
-  const { projectStatus, sopMajor, sopMinor, projectClientId, ...rest } = row;
+  const { projectStatus, sopMajor, sopMinor, projectClientId, loggedMinutes, ...rest } = row;
   return {
     ...rest,
+    // Time logged on the task (rejected entries left out), to read beside the estimate.
+    loggedHours: Math.round((loggedMinutes / 60) * 100) / 100,
     qaRequired: !!row.qaRequired,
     goalInherited: !!row.goalInherited,
     sopVersion: sopMajor == null ? null : `${sopMajor}.${sopMinor}`,
