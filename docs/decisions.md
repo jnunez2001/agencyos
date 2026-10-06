@@ -98,3 +98,8 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 - When the server can sign in with Google, the login page leads with **Sign in with Google**, and the username and password form sits under "Use a username and password". New members are added by Google email, with no password unless one is asked for.
 - Passwords are not removed. Each person with a linked Google account can turn their password off. Keep one strong password, kept in a password manager, for the Owner as a way back in if Google is unavailable.
 - Google sign-in is only as strong as the Google account, so every account that signs in should use 2-Step Verification, ideally a passkey or security key.
+
+## 2026-10-06: Google required for everyone except Owners
+
+- An Owner can switch on "Require Google sign-in" in Settings, Security. Non-Owners are then refused a correct password, and Owners keep theirs as the way back in. Spec: `docs/specs/2026-10-06-phase-8b-require-google.md`.
+- It cannot be switched on unless every active non-Owner is linked or invited, and while on: new non-Owners need a Google email, non-Owners cannot unlink Google, an Owner cannot be demoted without a Google link, and an Owner cannot turn off their own password.

@@ -25,6 +25,19 @@ async function servicesPanel(rerender) {
         h('div', { class: 'grow' }, h('div', { class: 'row-title' }, x.name, x.isActive ? null : h('span', { class: 'pill off' }, 'Not in use'))), icon('chevron')))));
 }
 
+// Owners only: require Google sign-in for everyone but Owners.
+function securityPanel(org, googleOn, rerender) {
+  const error = h('p', { class: 'error', role: 'alert' });
+  const sw = toggleSwitch(org.requireGoogle, async (on) => {
+    error.textContent = '';
+    try { await api('PUT', '/org/security', { requireGoogle: on }); await rerender(); } catch (err) { error.textContent = err.message; sw.setAttribute('aria-checked', String(!on)); }
+  }, 'Require Google sign-in');
+  return h('section', { class: 'panel' },
+    h('div', { class: 'panel-head' }, h('h2', {}, 'Security')),
+    h('div', { class: 'row-between' }, h('div', {}, h('div', { class: 'row-title' }, 'Require Google sign-in'), h('div', { class: 'row-sub' }, 'Everyone except Owners must sign in with Google. Owners keep their password as a way back in.')), googleOn || org.requireGoogle ? sw : h('span', { class: 'muted' }, 'Set up Google first')),
+    error);
+}
+
 async function googleSettings(rerender) {
   const status = await api('GET', '/integrations/google');
   const copy = status.serviceAccount.email ? h('button', { class: 'btn', type: 'button' }, 'Copy address') : null;
@@ -73,6 +86,7 @@ export async function settingsView(session, { refresh, rerender }) {
   const save = h('button', { class: 'btn btn-primary', type: 'submit' }, 'Save');
   const services = session.can['services.manage'] ? await servicesPanel(rerender) : null;
   const google = session.can['services.manage'] ? await googleSettings(rerender) : null;
+  const security = session.can['org.security'] ? securityPanel(org, (await api('GET', '/status')).googleSignIn, rerender) : null;
   return h('div', { class: 'page narrow' },
     h('div', { class: 'page-head' }, h('h1', { class: 'page-title' }, 'Settings')),
     h('form', { class: 'panel', onsubmit: async (e) => {
@@ -81,5 +95,5 @@ export async function settingsView(session, { refresh, rerender }) {
       save.disabled = true;
       try { await api('PATCH', '/org', { name: name.input.value, timezone: tz.input.value }); await refresh(); notice.textContent = 'Saved'; } catch (err) { error.textContent = err.message; }
       save.disabled = false;
-    } }, h('div', { class: 'panel-head' }, h('h2', {}, 'Agency')), name.el, tz.el, error, notice, editable && save), services, google);
+    } }, h('div', { class: 'panel-head' }, h('h2', {}, 'Agency')), name.el, tz.el, error, notice, editable && save), security, services, google);
 }

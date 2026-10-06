@@ -10,7 +10,7 @@ const PUBLIC = path.resolve(__dirname, '..', '..', 'public');
 const ROLES = ['owner', 'admin', 'manager', 'employee', 'contractor'];
 const WORK = { 'integrations.manage': 1, 'integrations.accounts': 1, 'results.view': 1, 'results.record': 1, 'reports.view': 1, 'reports.manage': 1, 'reports.approve': 1, 'services.view': 1, 'sops.view': 1, 'sops.manage': 1, 'qa.review': 1, 'clients.view': 1, 'clients.manage': 1, 'projects.view': 1, 'projects.manage': 1, 'tasks.view': 1, 'tasks.manage': 1, 'tasks.work': 1, 'dashboard.agency': 1 };
 const CAN = {
-  owner: { 'services.manage': 1, 'org.view': 1, 'org.update': 1, 'members.list': 1, 'members.create': 1, 'members.manage': 1, 'profile.edit_others': 1, 'profile.edit_self': 1, 'activity.view': 1, 'dashboard.team': 1, 'ai.use': 1, 'ai.manage': 1, 'ai.approve': 1, ...WORK },
+  owner: { 'org.security': 1, 'services.manage': 1, 'org.view': 1, 'org.update': 1, 'members.list': 1, 'members.create': 1, 'members.manage': 1, 'profile.edit_others': 1, 'profile.edit_self': 1, 'activity.view': 1, 'dashboard.team': 1, 'ai.use': 1, 'ai.manage': 1, 'ai.approve': 1, ...WORK },
   manager: { 'ai.use': 1, 'org.view': 1, 'members.list': 1, 'profile.edit_self': 1, 'dashboard.team': 1, ...WORK },
   employee: { 'results.view': 1, 'results.record': 1, 'reports.view': 1, 'sops.view': 1, 'ai.use': 1, 'org.view': 1, 'members.list': 1, 'profile.edit_self': 1, 'clients.view': 1, 'projects.view': 1, 'tasks.view': 1, 'tasks.work': 1, 'dashboard.agency': 1 },
   contractor: { 'ai.use': 1, 'org.view': 1, 'profile.edit_self': 1, 'tasks.view': 1, 'tasks.work': 1 },
@@ -65,7 +65,7 @@ function answers(role, { mustChange = false, empty = false, signedOut = false } 
     if (pathname === '/status') return { needsSetup: false, setupCodeRequired: false, googleSignIn: true };
     if (pathname === '/session' && signedOut) return { __status: 401, error: 'Sign in required' };
     if (pathname === '/session') return { user: me, organization: { id: 1, name: 'Whalls Agency', timezone: 'Asia/Manila' }, role, csrf: 'csrf-token', can, assignableRoles: assignable };
-    if (pathname === '/org') return { id: 1, name: 'Whalls Agency', timezone: 'Asia/Manila' };
+    if (pathname === '/org') return { id: 1, name: 'Whalls Agency', timezone: 'Asia/Manila', requireGoogle: false };
     const mineOnly = role === 'contractor';
     const taskList = [
       taskRow(1, 'Homepage copy', 'in_progress', { description: 'Draft the copy', priority: 'high', assigneeId: me.id, assigneeName: me.displayName, dueDate: '2020-01-01', isOverdue: true, estimateHours: 4, sopId: 1, sopTitle: 'Page Optimization', sopVersion: '1.0', qaRequired: true }),

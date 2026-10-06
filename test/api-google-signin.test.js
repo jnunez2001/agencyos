@@ -174,3 +174,27 @@ test('invitations, Google only, and unlinking over HTTP, with the last-way-in ru
   assert.equal(must.user.mustChangePassword, true);
   await app.close();
 });
+
+test('requiring Google over HTTP: Owner only, needs everyone invited, then passwords stop working for non-Owners', async () => {
+  const { google, factory } = setupGoogle();
+  const app = await setUp({ google: factory });
+  const o = app.owner;
+  const rayne = app.client(); await rayne.signIn('rayne');
+  assert.equal((await rayne.call('PUT', '/org/security', { requireGoogle: true })).status, 403);
+  const refused = await o.call('PUT', '/org/security', { requireGoogle: true });
+  assert.equal(refused.status, 400);
+  assert.match(refused.data.error, /Rayne, Mark, Sarah, Cole/);
+  for (const [id, email] of [[2, 'rayne'], [3, 'mark'], [4, 'sarah'], [5, 'cole']]) assert.equal((await o.call('PUT', `/members/${id}/google`, { email: `${email}@example.com` })).status, 200);
+  assert.deepEqual((await o.call('PUT', '/org/security', { requireGoogle: true })).data, { requireGoogle: true });
+  assert.equal((await o.call('GET', '/org')).data.requireGoogle, true);
+  const late = await app.client().signIn('mark');
+  assert.equal(late.status, 403);
+  assert.equal((await app.client().signIn('josh')).status, 200); // the Owner still can
+  assert.equal((await o.call('POST', '/members', { username: 'pwonly', displayName: 'P', role: 'employee', password: 'correct horse battery' })).status, 400);
+  // Google still works for an invited member
+  google.next = { sub: 'g-mark', email: 'mark@example.com', name: 'Mark' };
+  assert.equal((await finishLogin(app, await startLogin(app, google))).headers.get('location'), '/');
+  assert.equal((await o.call('PUT', '/org/security', { requireGoogle: false })).data.requireGoogle, false);
+  assert.equal((await app.client().signIn('mark')).status, 200);
+  await app.close();
+});
