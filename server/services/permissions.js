@@ -29,6 +29,11 @@ const ACTIONS = {
   // Change the status of a task assigned to you, and comment on a task you can see.
   'tasks.work': ALL,
   'dashboard.agency': NOT_CONTRACTOR,
+  // SOPs: managers write them, staff read the ones in use. A Contractor sees only the SOP on their own task.
+  'sops.view': NOT_CONTRACTOR,
+  'sops.manage': MANAGERS,
+  // Reviewing work in QA is a human decision by a manager or above.
+  'qa.review': MANAGERS,
   // Everyone connects their own AI as themselves. Owner and Admin also see and decide everyone's.
   'ai.use': ALL,
   'ai.manage': OWNER_ADMIN,

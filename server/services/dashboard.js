@@ -5,6 +5,7 @@ const perms = require('./permissions');
 const tasks = require('./tasks');
 const { today, addDays } = require('./dates');
 const aiplans = require('./aiplans');
+const qa = require('./qa');
 
 function getDashboard(db, ctx) {
   const org = db.prepare('SELECT id, name, timezone FROM organizations WHERE id = ?').get(ctx.organizationId);
@@ -54,7 +55,7 @@ function getDashboard(db, ctx) {
         GROUP BY u.id ORDER BY m.id`
     ).all(todayDate, ctx.organizationId);
   }
-  return { organization: org, me: { id: ctx.actor.id, displayName: me.displayName, role: ctx.actor.role }, today: todayDate, work, agency, team, workload, aiPending: aiplans.pendingCount(db, ctx) };
+  return { organization: org, me: { id: ctx.actor.id, displayName: me.displayName, role: ctx.actor.role }, today: todayDate, work, agency, team, workload, aiPending: aiplans.pendingCount(db, ctx), qaWaiting: qa.waitingCount(db, ctx) };
 }
 
 module.exports = { getDashboard };

@@ -5,11 +5,13 @@ const { logActivity } = require('./audit');
 const { ServiceError } = require('./errors');
 const { cleanText, cleanOptional, cleanEnum, cleanDate, cleanTeamMember, diff } = require('./validate');
 const { today } = require('./dates');
+const sops = require('./sops');
+const qarecords = require('./qarecords');
 const perms = require('./permissions');
 
-const STATUSES = ['todo', 'in_progress', 'review', 'done'];
+const STATUSES = ['todo', 'in_progress', 'review', 'changes', 'done'];
 const PRIORITIES = ['low', 'normal', 'high', 'urgent'];
-const FIELDS = ['title', 'description', 'status', 'priority', 'assigneeId', 'dueDate', 'estimateHours', 'projectId'];
+const FIELDS = ['title', 'description', 'status', 'priority', 'assigneeId', 'dueDate', 'estimateHours', 'projectId', 'sopId', 'sopVersionId', 'qaRequired'];
 
 const logCtx = (ctx) => ({ organizationId: ctx.organizationId, actorUserId: ctx.actor.id, source: ctx.source || 'web', ip: ctx.ip || null });
 const need = (ctx, action) => { if (!perms.can(ctx.actor.role, action)) throw new ServiceError(403, 'Not allowed'); };
@@ -19,18 +21,23 @@ const SELECT = `
   SELECT t.id, t.project_id AS projectId, p.name AS projectName, p.client_id AS clientId, c.name AS clientName, p.status AS projectStatus,
          t.title, t.description, t.status, t.priority, t.assignee_id AS assigneeId, au.display_name AS assigneeName,
          t.due_date AS dueDate, t.estimate_hours AS estimateHours, t.completed_at AS completedAt,
-         t.created_at AS createdAt, t.updated_at AS updatedAt
+         t.created_at AS createdAt, t.updated_at AS updatedAt,
+         t.sop_id AS sopId, sp.title AS sopTitle, t.sop_version_id AS sopVersionId, sv.major AS sopMajor, sv.minor AS sopMinor, t.qa_required AS qaRequired
     FROM tasks t
     JOIN projects p ON p.id = t.project_id AND p.organization_id = t.organization_id
     JOIN clients c ON c.id = p.client_id AND c.organization_id = p.organization_id
     LEFT JOIN users au ON au.id = t.assignee_id
+    LEFT JOIN sops sp ON sp.id = t.sop_id AND sp.organization_id = t.organization_id
+    LEFT JOIN sop_versions sv ON sv.id = t.sop_version_id
    WHERE t.organization_id = ?`;
 
 function shape(db, ctx, row, todayDate) {
   const manage = perms.can(ctx.actor.role, 'tasks.manage');
-  const { projectStatus, ...rest } = row;
+  const { projectStatus, sopMajor, sopMinor, ...rest } = row;
   return {
     ...rest,
+    qaRequired: !!row.qaRequired,
+    sopVersion: sopMajor == null ? null : `${sopMajor}.${sopMinor}`,
     isOverdue: !!(row.dueDate && row.status !== 'done' && row.dueDate < todayDate),
     // What this viewer may do with it, so the screens never need their own copy of the rule.
     canEdit: manage,
@@ -68,9 +75,20 @@ function listTasks(db, ctx, q = {}) {
   return rows.map((r) => shape(db, ctx, r, todayDate));
 }
 
+// A task with everything its page needs: the SOP it follows (the pinned version) and its QA state.
+function detail(db, ctx, id) {
+  const base = shape(db, ctx, find(db, ctx, id), today(db, ctx));
+  const history = qarecords.history(db, ctx.organizationId, base.id);
+  return {
+    ...base,
+    sop: sops.pinned(db, ctx.organizationId, base.sopId, base.sopVersionId),
+    qa: { required: base.qaRequired, pending: history.find((h) => h.status === 'pending') || null, history },
+  };
+}
+
 function getTask(db, ctx, id) {
   need(ctx, 'tasks.view');
-  return shape(db, ctx, find(db, ctx, id), today(db, ctx));
+  return detail(db, ctx, id);
 }
 
 // The project must be this agency's and not archived.
@@ -88,6 +106,21 @@ function cleanEstimate(value) {
   return Math.round(n * 100) / 100;
 }
 
+// Moving to Done or Changes requested is not a plain edit when QA is involved.
+function checkStatusMove(from, to, qaRequired) {
+  if (to === from) return;
+  if (to === 'changes') throw new ServiceError(400, 'Changes are requested by a reviewer in the QA queue');
+  if (to === 'done' && qaRequired) throw new ServiceError(400, 'This task needs QA. Submit it for QA and a reviewer will approve it');
+}
+
+// A task entering QA gets a record with the SOP's checklist as it is on the version the task follows.
+function enterReview(db, ctx, taskId) {
+  const row = db.prepare('SELECT sop_id AS sopId, sop_version_id AS versionId FROM tasks WHERE organization_id = ? AND id = ?').get(ctx.organizationId, taskId);
+  const pinned = sops.pinned(db, ctx.organizationId, row.sopId, row.versionId);
+  qarecords.createPending(db, ctx, taskId, pinned ? pinned.content.checklist : []);
+  logActivity(db, { ...logCtx(ctx), action: 'qa.submit', objectType: 'task', objectId: taskId, after: { status: 'review' } });
+}
+
 function createTask(db, ctx, input = {}) {
   need(ctx, 'tasks.manage');
   return db.transaction(() => {
@@ -101,11 +134,15 @@ function createTask(db, ctx, input = {}) {
       dueDate: cleanDate(input.dueDate, 'Due date'),
       estimateHours: cleanEstimate(input.estimateHours),
     };
+    const sop = input.sopId == null || input.sopId === '' ? null : sops.forAttach(db, ctx.organizationId, input.sopId);
+    const qaRequired = input.qaRequired !== undefined ? !!input.qaRequired : !!(sop && sop.requiresQa);
+    checkStatusMove(null, next.status, qaRequired);
     const id = Number(db.prepare(
-      `INSERT INTO tasks (organization_id, project_id, title, description, status, priority, assignee_id, due_date, estimate_hours, completed_at, created_by)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${next.status === 'done' ? "strftime('%Y-%m-%dT%H:%M:%fZ','now')" : 'NULL'}, ?)`
-    ).run(ctx.organizationId, next.projectId, next.title, next.description, next.status, next.priority, next.assigneeId, next.dueDate, next.estimateHours, ctx.actor.id).lastInsertRowid);
-    logActivity(db, { ...logCtx(ctx), action: 'task.create', objectType: 'task', objectId: id, after: { title: next.title, projectId: next.projectId, assigneeId: next.assigneeId } });
+      `INSERT INTO tasks (organization_id, project_id, title, description, status, priority, assignee_id, due_date, estimate_hours, completed_at, created_by, sop_id, sop_version_id, qa_required)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${next.status === 'done' ? "strftime('%Y-%m-%dT%H:%M:%fZ','now')" : 'NULL'}, ?, ?, ?, ?)`
+    ).run(ctx.organizationId, next.projectId, next.title, next.description, next.status, next.priority, next.assigneeId, next.dueDate, next.estimateHours, ctx.actor.id, sop ? sop.id : null, sop ? sop.versionId : null, qaRequired ? 1 : 0).lastInsertRowid);
+    logActivity(db, { ...logCtx(ctx), action: 'task.create', objectType: 'task', objectId: id, after: { title: next.title, projectId: next.projectId, assigneeId: next.assigneeId, ...(sop ? { sopId: sop.id } : {}) } });
+    if (next.status === 'review') enterReview(db, ctx, id);
     return shape(db, ctx, find(db, ctx, id), today(db, ctx));
   })();
 }
@@ -118,8 +155,8 @@ function updateTask(db, ctx, id, patch = {}) {
     if (!manage && Object.keys(patch).some((k) => k !== 'status')) throw new ServiceError(403, 'Not allowed');
     const row = find(db, ctx, id);
     if (!manage && row.assigneeId !== ctx.actor.id) throw new ServiceError(403, 'Not allowed');
-    const current = { ...row };
-    const next = { ...row };
+    const current = { ...row, qaRequired: !!row.qaRequired };
+    const next = { ...current };
     if (patch.title !== undefined) next.title = cleanText(patch.title, 'Title', 1, 200);
     if (patch.description !== undefined) next.description = cleanOptional(patch.description, 'Description', 10000);
     if (patch.status !== undefined) next.status = cleanEnum(patch.status, STATUSES, 'status');
@@ -128,15 +165,32 @@ function updateTask(db, ctx, id, patch = {}) {
     if (patch.dueDate !== undefined) next.dueDate = cleanDate(patch.dueDate, 'Due date');
     if (patch.estimateHours !== undefined) next.estimateHours = cleanEstimate(patch.estimateHours);
     if (patch.projectId !== undefined && Number(patch.projectId) !== row.projectId) next.projectId = cleanProject(db, ctx.organizationId, patch.projectId);
+    if (patch.qaRequired !== undefined) next.qaRequired = !!patch.qaRequired;
+    if (patch.sopId !== undefined && Number(patch.sopId) !== row.sopId) {
+      if (patch.sopId === null || patch.sopId === '') { next.sopId = null; next.sopVersionId = null; } else {
+        const sop = sops.forAttach(db, ctx.organizationId, patch.sopId);
+        next.sopId = sop.id;
+        next.sopVersionId = sop.versionId;
+        if (patch.qaRequired === undefined) next.qaRequired = sop.requiresQa;
+      }
+    } else if (patch.sopLatest && row.sopId) {
+      next.sopVersionId = sops.forAttach(db, ctx.organizationId, row.sopId).versionId;
+    }
+    checkStatusMove(current.status, next.status, next.qaRequired);
     const d = diff(current, next, FIELDS);
     if (!d.changed) return shape(db, ctx, row, today(db, ctx));
     const completed = d.after.status ? (next.status === 'done' ? "strftime('%Y-%m-%dT%H:%M:%fZ','now')" : 'NULL') : 'completed_at';
     db.prepare(
       `UPDATE tasks SET project_id = ?, title = ?, description = ?, status = ?, priority = ?, assignee_id = ?, due_date = ?, estimate_hours = ?,
+              sop_id = ?, sop_version_id = ?, qa_required = ?,
               completed_at = ${completed}, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
         WHERE organization_id = ? AND id = ?`
-    ).run(next.projectId, next.title, next.description, next.status, next.priority, next.assigneeId, next.dueDate, next.estimateHours, ctx.organizationId, row.id);
+    ).run(next.projectId, next.title, next.description, next.status, next.priority, next.assigneeId, next.dueDate, next.estimateHours, next.sopId, next.sopVersionId, next.qaRequired ? 1 : 0, ctx.organizationId, row.id);
     logActivity(db, { ...logCtx(ctx), action: 'task.update', objectType: 'task', objectId: row.id, before: d.before, after: d.after });
+    if (d.after.status) {
+      if (current.status === 'review') qarecords.withdrawPending(db, ctx.organizationId, row.id);
+      if (next.status === 'review') enterReview(db, ctx, row.id);
+    }
     return shape(db, ctx, find(db, ctx, id), today(db, ctx));
   })();
 }
@@ -170,4 +224,19 @@ function addComment(db, ctx, taskId, input = {}) {
   })();
 }
 
-module.exports = { STATUSES, PRIORITIES, listTasks, getTask, createTask, updateTask, deleteTask, listComments, addComment };
+// Starts work from an SOP: one task named after it, or one task per step. All or nothing.
+function createTasksFromSop(db, ctx, sopId, input = {}) {
+  need(ctx, 'tasks.manage');
+  const mode = input.mode === undefined ? 'task' : input.mode;
+  if (!['task', 'steps'].includes(mode)) throw new ServiceError(400, 'Choose mode task or steps');
+  return db.transaction(() => {
+    const sop = sops.forAttach(db, ctx.organizationId, sopId);
+    const content = sops.pinned(db, ctx.organizationId, sop.id, sop.versionId).content;
+    const titles = mode === 'task' ? [sop.title] : content.steps;
+    if (titles.length === 0) throw new ServiceError(400, 'This SOP has no steps');
+    const common = { projectId: input.projectId, sopId: sop.id, assigneeId: input.assigneeId, dueDate: input.dueDate, priority: input.priority };
+    return titles.map((title) => createTask(db, ctx, { ...common, title: title.slice(0, 200) }));
+  })();
+}
+
+module.exports = { STATUSES, PRIORITIES, listTasks, getTask, detail, find, createTask, updateTask, deleteTask, createTasksFromSop, listComments, addComment };
