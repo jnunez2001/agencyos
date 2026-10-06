@@ -84,3 +84,11 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 - Josh wanted the OpenSEO-style flow: connect his own Google account once and pick from every site and property it can see. Added next to the service account, which stays as an option. Spec: `docs/specs/2026-10-06-phase-7b-google-accounts.md`.
 - Needs a Google OAuth client from his own Google Cloud project (id and secret installed with `deploy/set-google-oauth.sh`). Publish the consent screen to production, or Google expires the sign-in every 7 days; the unverified-app warning is clicked through once.
 - Refresh tokens are stored encrypted (AES-256-GCM) with a key file beside the database, so a database copy or backup alone cannot reveal them. Only read-only scopes are requested. Owner and Admin add and remove accounts; Managers and above connect clients through them.
+
+## 2026-10-06: Sign in with Google (invite-only)
+
+- Google is also a way to sign in to AgencyOS. Invite-only: a Google account that is not linked and not invited gets nothing, and nothing is created automatically. Spec: `docs/specs/2026-10-06-phase-8-google-sign-in.md`.
+- A Google account is tied to a person by Google's permanent account id, not the email. A member is invited by Google email (no password needed) or links their own account from My profile.
+- Nobody loses their last way in: password sign-in can be turned off only while Google is linked, and Google can be unlinked only while password sign-in is on. An Owner or Admin resetting the password turns password sign-in back on.
+- Uses the same Google OAuth client as the data connection, with one more return address (`/api/auth/google/callback`). Basic identity access only (openid, email, profile), so no unverified-app warning.
+- The sign-in state is single use, short lived and held in a cookie as well, with PKCE and a nonce; the ID token's issuer, audience, expiry, nonce and verified email are checked.

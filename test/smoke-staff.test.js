@@ -39,6 +39,13 @@ test('an Employee reads SOPs, follows them on their task, submits for QA, and ca
   buttonWith(sheet, 'Submit for QA').click();
   await app.wait(200);
   assert.ok(app.calls.some((c) => c.method === 'PATCH' && c.path === '/tasks/1' && c.body.status === 'review'));
+  // my profile: an invitation to link Google, and the password card while password sign-in is on
+  await app.go('#/profile');
+  assert.match(app.main().textContent, /invited sarah@example\.com/);
+  assert.ok([...app.main().querySelectorAll('button')].some((b) => /Link my Google account/.test(b.textContent)));
+  assert.ok(app.main().querySelector('input[name=current]'));
+  assert.equal(strayText(document.body), null);
+
   // results are recorded by staff; reports are read only
   await app.go('#/clients/1');
   assert.ok(buttonWith(app.main(), 'Record result'));

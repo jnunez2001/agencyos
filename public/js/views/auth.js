@@ -37,13 +37,28 @@ export function setupView({ setupCodeRequired }, onDone) {
   }));
 }
 
-export function loginView(onDone) {
+// What the server says when a Google sign-in did not work. The address carries only a short code.
+export const SIGN_IN_PROBLEMS = {
+  'no-account': 'This Google account has no AgencyOS account. Ask an Owner or Admin to invite you with this email address.',
+  disabled: 'This account is turned off. Ask an Owner or Admin.',
+  locked: 'Too many attempts. Try again later.',
+  denied: 'Google sign-in was cancelled.',
+  expired: 'That sign-in link expired. Try again.',
+  google: 'Google did not accept the sign-in. Try again.',
+  setup: 'Signing in with Google is not set up on this server.',
+};
+
+export function loginView(onDone, { googleSignIn = false, notice = '' } = {}) {
   const user = field('Username', { name: 'username', required: true, autocapitalize: 'none', autocomplete: 'username' });
   const pass = field('Password', { name: 'password', type: 'password', required: true, autocomplete: 'current-password' });
-  return card('Sign in', form([user, pass], 'Sign in', async () => {
-    await api('POST', '/login', { username: user.input.value, password: pass.input.value });
-    await onDone();
-  }));
+  return card('Sign in',
+    notice ? h('div', { class: 'error', role: 'alert' }, notice) : null,
+    form([user, pass], 'Sign in', async () => {
+      await api('POST', '/login', { username: user.input.value, password: pass.input.value });
+      await onDone();
+    }),
+    googleSignIn ? h('div', { class: 'or' }, h('span', {}, 'or')) : null,
+    googleSignIn ? h('a', { class: 'btn btn-block', href: '/api/auth/google/start' }, 'Sign in with Google') : null);
 }
 
 // Shown right after a first sign-in with a temporary password. Nothing else works until it is changed.

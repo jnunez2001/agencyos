@@ -51,9 +51,10 @@ const SOP_LIST = [
   { id: 2, title: 'Draft idea', service: '', ownerId: 3, ownerName: 'Mark Cruz', status: 'draft', requiresQa: false, version: '1.0', versionId: 3, createdAt: NOW, updatedAt: NOW },
 ];
 const taskRow = (id, title, status, extra = {}) => ({ id, goalId: null, goalTitle: null, goalInherited: false, sopId: null, sopTitle: null, sopVersion: null, qaRequired: false, projectId: 1, projectName: 'New website', clientId: 1, clientName: 'Acme Dental', title, description: '', status, priority: 'normal', assigneeId: null, assigneeName: null, dueDate: null, estimateHours: null, completedAt: null, isOverdue: false, createdAt: NOW, updatedAt: NOW, ...extra });
+const GOOGLE_BY_ID = { 1: { linked: true, email: 'josh@example.com', pending: false }, 2: { linked: false, email: null, pending: false }, 3: { linked: false, email: 'mark@example.com', pending: true }, 4: { linked: true, email: 'sarah@example.com', pending: false } };
 const RANK = { owner: 5, admin: 4, manager: 3, employee: 2, contractor: 1 };
 
-function answers(role, { mustChange = false, empty = false } = {}) {
+function answers(role, { mustChange = false, empty = false, signedOut = false } = {}) {
   const can = Object.fromEntries(Object.keys(CAN.owner).map((k) => [k, !!CAN[role][k]]));
   const me = { id: role === 'owner' ? 1 : 3, username: role === 'owner' ? 'josh' : 'mark', displayName: role === 'owner' ? 'Josh Nunez' : 'Mark Cruz', mustChangePassword: mustChange };
   const assignable = role === 'owner' ? ROLES : role === 'admin' ? ['manager', 'employee', 'contractor'] : [];
@@ -61,7 +62,8 @@ function answers(role, { mustChange = false, empty = false } = {}) {
   const google = { link: null };
   return (method, url, body) => {
     const [pathname] = url.split('?');
-    if (pathname === '/status') return { needsSetup: false, setupCodeRequired: false };
+    if (pathname === '/status') return { needsSetup: false, setupCodeRequired: false, googleSignIn: true };
+    if (pathname === '/session' && signedOut) return { __status: 401, error: 'Sign in required' };
     if (pathname === '/session') return { user: me, organization: { id: 1, name: 'Whalls Agency', timezone: 'Asia/Manila' }, role, csrf: 'csrf-token', can, assignableRoles: assignable };
     if (pathname === '/org') return { id: 1, name: 'Whalls Agency', timezone: 'Asia/Manila' };
     const mineOnly = role === 'contractor';
@@ -123,7 +125,9 @@ function answers(role, { mustChange = false, empty = false } = {}) {
       aiPending: can['ai.approve'] ? 1 : 0,
       qaWaiting: can['qa.review'] ? 1 : 0,
       team: can['dashboard.team'] ? { total: 4, active: 3, byRole: { owner: 1, admin: 1, manager: 1, employee: 0, contractor: 0 }, mustChangePassword: 1 } : null };
-    if (pathname === '/members') return empty ? [] : PEOPLE.map((p) => ({ ...p, canManage: can['members.manage'] && (role === 'owner' || RANK[role] > RANK[p.role]), ...(can['members.manage'] ? {} : { mustChangePassword: undefined }) }));
+    if (pathname === '/profile/google' && method === 'GET') return role === 'employee' ? { linked: false, email: null, pendingEmail: 'sarah@example.com', passwordLogin: true, canUnlink: false, canTurnOffPassword: false } : { linked: true, email: 'josh@example.com', pendingEmail: null, passwordLogin: true, canUnlink: true, canTurnOffPassword: true };
+    if (pathname === '/profile/google/start' && method === 'POST') return { url: 'https://accounts.google.com/o/oauth2/v2/auth?state=x' };
+    if (pathname === '/members') return empty ? [] : PEOPLE.map((p) => ({ ...p, ...(can['members.manage'] ? { passwordLogin: p.id !== 4, google: GOOGLE_BY_ID[p.id] } : {}), canManage: can['members.manage'] && (role === 'owner' || RANK[role] > RANK[p.role]), ...(can['members.manage'] ? {} : { mustChangePassword: undefined }) }));
     if (/^\/members\/\d+\/profile$/.test(pathname) || pathname === '/profile') return pathname === '/profile' ? profile : { ...profile, userId: 3, username: 'mark', displayName: 'Mark Cruz' };
     if (pathname === '/activity') return empty ? [] : [
       { id: 3, action: 'member.update', objectType: 'member', objectId: 4, actorId: 1, actorName: 'Josh Nunez', before: { role: 'employee', isActive: true }, after: { role: 'manager', isActive: false }, source: 'web', createdAt: new Date().toISOString() },

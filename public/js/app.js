@@ -3,7 +3,7 @@
 import { h, icon } from './dom.js';
 import { api, setCsrf } from './api.js';
 import { avatar } from './ui.js';
-import { setupView, loginView, changePasswordView } from './views/auth.js';
+import { setupView, loginView, changePasswordView, SIGN_IN_PROBLEMS } from './views/auth.js';
 import { dashboardView } from './views/dashboard.js';
 import { teamView } from './views/team.js';
 import { profileView } from './views/profile.js';
@@ -98,6 +98,14 @@ async function render() {
   window.scrollTo(0, 0);
 }
 
+// A Google sign-in that failed sends the person back with a short code in the address. Show it once, then tidy the address.
+function signInNotice() {
+  const m = /^#\/signin-failed\/([a-z-]+)$/.exec(location.hash);
+  if (!m) return '';
+  history.replaceState(null, '', location.pathname);
+  return SIGN_IN_PROBLEMS[m[1]] || 'The Google sign-in did not work. Try again.';
+}
+
 async function boot() {
   try {
     const status = await api('GET', '/status');
@@ -105,7 +113,7 @@ async function boot() {
     try {
       await refreshSession();
     } catch (err) {
-      if (err.status === 401) return void root.replaceChildren(loginView(boot));
+      if (err.status === 401) return void root.replaceChildren(loginView(boot, { googleSignIn: !!status.googleSignIn, notice: signInNotice() }));
       throw err;
     }
     if (session.user.mustChangePassword) return void root.replaceChildren(changePasswordView(session, boot, signOut));

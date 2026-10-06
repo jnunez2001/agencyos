@@ -6,7 +6,7 @@ const { boot, setUp, PASSWORD } = require('./support/http');
 test('first run: status, setup, and setup can only happen once', async () => {
   const app = await boot();
   const c = app.client();
-  assert.deepEqual((await c.call('GET', '/status')).data, { needsSetup: true, setupCodeRequired: false });
+  assert.deepEqual((await c.call('GET', '/status')).data, { needsSetup: true, setupCodeRequired: false, googleSignIn: false });
   assert.equal((await c.call('POST', '/setup', { organizationName: '', displayName: 'Josh', username: 'josh', password: PASSWORD })).status, 400);
   assert.equal((await c.call('POST', '/setup', { organizationName: 'Whalls', displayName: 'Josh', username: 'josh', password: PASSWORD })).status, 200);
   assert.equal((await c.call('GET', '/status')).data.needsSetup, false);

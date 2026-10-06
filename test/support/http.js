@@ -17,12 +17,12 @@ async function boot(options = {}) {
     const call = async (method, path, body, { csrfToken = csrf, raw = false } = {}) => {
       const res = await fetch(base + path, { method, headers: { 'content-type': 'application/json', ...(cookie ? { cookie } : {}), ...(csrfToken ? { 'x-csrf-token': csrfToken } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
       const set = res.headers.get('set-cookie');
-      if (set) cookie = set.split(';')[0];
+      if (set && set.startsWith('agencyos_sid=')) cookie = set.split(';')[0];
       const data = await res.json().catch(() => null);
       return raw ? { res, data } : { status: res.status, data };
     };
     // A plain request with this session's cookie, without following redirects (for the Google callback).
-    const raw = (method, path) => fetch(base + path, { method, redirect: 'manual', headers: cookie ? { cookie } : {} });
+    const raw = (method, path, extraCookie = '') => fetch(base + path, { method, redirect: 'manual', headers: cookie || extraCookie ? { cookie: [cookie, extraCookie].filter(Boolean).join('; ') } : {} });
     return {
       call, raw,
       async signIn(username, password = PASSWORD) { const r = await call('POST', '/login', { username, password }); const s = await call('GET', '/session'); csrf = s.data && s.data.csrf; return r; },

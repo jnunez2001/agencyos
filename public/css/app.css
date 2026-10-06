@@ -342,3 +342,6 @@ a.row:hover { background: var(--hover); }
 .advanced { border-top: 1px solid var(--line); padding-top: 12px; }
 .advanced summary { cursor: pointer; font-weight: 600; color: var(--accent); }
 .advanced > div { margin-top: 10px; }
+.or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
+.or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+a.btn { text-decoration: none; }

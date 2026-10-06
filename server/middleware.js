@@ -29,6 +29,15 @@ function setSessionCookie(req, res, token, expires) {
   res.append('Set-Cookie', parts.join('; '));
 }
 
+// A short-lived cookie that holds the Google sign-in state, so a sign-in can only be finished in the browser that started it.
+const GSTATE = 'agencyos_gstate';
+function setStateCookie(req, res, state) {
+  res.append('Set-Cookie', `${GSTATE}=${state}; Path=/api/auth/google; HttpOnly; SameSite=Lax; Max-Age=600${config.cookieSecure || req.secure ? '; Secure' : ''}`);
+}
+function clearStateCookie(req, res) {
+  res.append('Set-Cookie', `${GSTATE}=; Path=/api/auth/google; HttpOnly; SameSite=Lax; Max-Age=0${config.cookieSecure || req.secure ? '; Secure' : ''}`);
+}
+
 function clearSessionCookie(req, res) {
   res.append('Set-Cookie', `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Expires=Thu, 01 Jan 1970 00:00:00 GMT${config.cookieSecure || req.secure ? '; Secure' : ''}`);
 }
@@ -71,4 +80,4 @@ function errorHandler(err, req, res, next) {
   res.status(500).json({ error: 'Something went wrong' });
 }
 
-module.exports = { securityHeaders, setSessionCookie, clearSessionCookie, sessionLoader, requireAuth, requireCsrf, requirePasswordChanged, wrap, errorHandler, COOKIE };
+module.exports = { parseCookies, GSTATE, setStateCookie, clearStateCookie, securityHeaders, setSessionCookie, clearSessionCookie, sessionLoader, requireAuth, requireCsrf, requirePasswordChanged, wrap, errorHandler, COOKIE };

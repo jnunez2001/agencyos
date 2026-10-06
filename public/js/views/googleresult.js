@@ -13,7 +13,22 @@ const FAILED = {
 // `settings` or `clients-12` becomes an address in the app. Nothing else is ever followed.
 const target = (key) => (/^clients-\d+$/.test(key || '') ? `#/clients/${key.split('-')[1]}` : '#/settings');
 
+const LINK_FAILED = {
+  expired: 'That link expired, or it was started by someone else. Go back and try again.',
+  taken: 'That Google account is already linked to someone else.',
+  invited: 'That Google email is invited for another member.',
+  different: 'A different Google account is already linked to you. Unlink it first.',
+};
+
 export async function googleResultView(session, { param, extra }) {
+  if (param === 'linked' || param === 'link-failed') {
+    const good = param === 'linked';
+    return h('div', { class: 'page narrow' },
+      h('div', { class: 'page-head' }, h('h1', { class: 'page-title' }, good ? 'Google account linked' : 'Google account not linked')),
+      h('section', { class: 'panel' },
+        h('p', {}, good ? 'You can now sign in with Google on the login page.' : (LINK_FAILED[extra] || 'Something went wrong. Go back and try again.')),
+        h('div', { class: 'sheet-actions' }, h('a', { class: 'btn btn-primary', href: '#/profile' }, good ? 'Continue' : 'Back'))));
+  }
   const ok = param === 'ok';
   return h('div', { class: 'page narrow' },
     h('div', { class: 'page-head' }, h('h1', { class: 'page-title' }, ok ? 'Google account connected' : 'Google account not added')),

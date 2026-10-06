@@ -1,19 +1,20 @@
 // Joshua Nunez
 import { h, icon, openSheet } from '../dom.js';
 import { api } from '../api.js';
-import { avatar, rolePill, field, selectField, toggleSwitch, tempPassword, sheetForm, ROLE_LABEL, DAY_LABEL } from '../ui.js';
+import { avatar, rolePill, field, selectField, toggleSwitch, tempPassword, sheetForm, confirmButton, ROLE_LABEL, DAY_LABEL } from '../ui.js';
 
 export function openAddMember(session, onChanged) {
   openSheet('Add a team member', (close) => {
     const name = field('Name', { name: 'displayName', maxlength: 60, required: true });
     const user = field('Username', { name: 'username', required: true, autocapitalize: 'none' });
     const role = selectField('Role', session.assignableRoles.map((r) => [r, ROLE_LABEL[r]]), session.assignableRoles.includes('employee') ? 'employee' : session.assignableRoles[0], { name: 'role' });
-    const pass = field('Temporary password', { name: 'password', required: true, value: tempPassword() });
+    const google = field('Google email (optional)', { name: 'googleEmail', type: 'email', maxlength: 200, autocapitalize: 'none', placeholder: 'name@gmail.com' });
+    const pass = field('Temporary password', { name: 'password', value: tempPassword() });
     const regen = h('button', { class: 'btn-text', type: 'button', onclick: () => { pass.input.value = tempPassword(); } }, 'Make another');
-    return sheetForm([name, user, role, pass], 'Add member', async () => {
-      await api('POST', '/members', { displayName: name.input.value, username: user.input.value, role: role.input.value, password: pass.input.value });
+    return sheetForm([name, user, role, google, pass], 'Add member', async () => {
+      await api('POST', '/members', { displayName: name.input.value, username: user.input.value, role: role.input.value, password: pass.input.value || undefined, googleEmail: google.input.value.trim() || undefined });
       await onChanged();
-    }, close, h('div', { class: 'row-between' }, h('span', { class: 'muted' }, 'They must change it at their first sign-in.'), regen));
+    }, close, h('div', { class: 'row-between' }, h('span', { class: 'muted' }, 'Empty password with a Google email means Google only.'), regen));
   });
 }
 
@@ -37,12 +38,23 @@ async function openMember(session, member, onChanged) {
     const self = member.id === session.user.id;
     const activeRow = self ? null : h('div', { class: 'row-between' }, h('span', {}, 'Active'), toggleSwitch(member.isActive, (on) => { active.value = on; }, 'Active'));
     const reset = h('button', { class: 'btn', type: 'button', onclick: () => { close(); openResetPassword(member, onChanged); } }, icon('key'), 'Reset password');
+    // Google sign-in for this person: invite an email, clear it, or turn off their password.
+    const gError = h('p', { class: 'error', role: 'alert' });
+    const gEmail = field('Google email', { name: 'invite', type: 'email', maxlength: 200, autocapitalize: 'none', value: member.google && !member.google.linked && member.google.email ? member.google.email : '', disabled: !!(member.google && member.google.linked) });
+    const gAct = (fn) => async () => { gError.textContent = ''; try { await fn(); await onChanged(); close(); } catch (err) { gError.textContent = err.message; } };
+    const googleSection = member.google ? h('div', { class: 'stack' },
+      h('p', { class: 'label' }, 'Google sign-in'),
+      member.google.linked ? h('p', {}, `Linked: ${member.google.email}${member.passwordLogin ? '' : ' (password sign-in is off)'}`) : gEmail.el,
+      h('div', { class: 'sheet-actions left' },
+        !member.google.linked ? h('button', { class: 'btn', type: 'button', onclick: gAct(() => api('PUT', `/members/${member.id}/google`, { email: gEmail.input.value.trim() || null })) }, member.google.pending ? 'Save invitation' : 'Invite by Google email') : null,
+        member.google.linked && member.passwordLogin ? confirmButton('Turn off password sign-in', 'Click again to turn off', gAct(() => api('POST', `/members/${member.id}/password-login`, { enabled: false }))) : null),
+      gError) : null;
     return sheetForm([name, role], 'Save', async () => {
       const patch = { displayName: name.input.value, role: role.input.value };
       if (!self) patch.isActive = active.value;
       await api('PATCH', `/members/${member.id}`, patch);
       await onChanged();
-    }, close, h('div', {}, head, facts, activeRow, reset));
+    }, close, h('div', {}, head, facts, googleSection, activeRow, reset));
   });
 }
 

@@ -23,6 +23,7 @@ const goals = require('../services/goals');
 const results = require('../services/results');
 const reports = require('../services/reports');
 const googlesync = require('../services/googlesync');
+const identities = require('../services/identities');
 const { ServiceError } = require('../services/errors');
 
 function idParam(req) {
@@ -42,7 +43,50 @@ module.exports = function apiRouter(db, { google = null } = {}) {
   });
 
   // ---- open routes ----
-  r.get('/status', (req, res) => res.json({ needsSetup: orgs.needsSetup(db), setupCodeRequired: !!config.setupToken }));
+  // Whether the server can sign people in with Google (it needs a Google OAuth client).
+  const googleSignIn = () => !!(google && google.oauthConfigured === true && typeof google.startIdentity === 'function');
+  r.get('/status', (req, res) => res.json({ needsSetup: orgs.needsSetup(db), setupCodeRequired: !!config.setupToken, googleSignIn: googleSignIn() }));
+
+  // Sign in with Google: send the person to Google. The state goes in a short-lived cookie as well as in the address.
+  r.get('/auth/google/start', (req, res) => {
+    if (!googleSignIn()) return res.redirect(302, '/#/signin-failed/setup');
+    const { url, state } = google.startIdentity({ origin: originOf(req), purpose: 'login' });
+    mw.setStateCookie(req, res, state);
+    res.redirect(302, url);
+  });
+
+  // Google sends the person back here, both to sign in and to link an account from My profile.
+  r.get('/auth/google/callback', mw.wrap(async (req, res) => {
+    const state = String(req.query.state || '');
+    const cookieState = mw.parseCookies(req.headers.cookie)[mw.GSTATE];
+    mw.clearStateCookie(req, res);
+    if (!googleSignIn()) return res.redirect(302, '/#/signin-failed/setup');
+    if (req.query.error) return res.redirect(302, '/#/signin-failed/denied');
+    if (!state || cookieState !== state) return res.redirect(302, '/#/signin-failed/expired');
+    let done;
+    try {
+      done = await google.finishIdentity({ origin: originOf(req), code: String(req.query.code || ''), state });
+    } catch (err) {
+      if (!(err instanceof ServiceError)) throw err;
+      return res.redirect(302, `/#/signin-failed/${err.status === 502 ? 'google' : 'expired'}`);
+    }
+    if (done.purpose === 'login') {
+      const out = identities.loginWithGoogle(db, done.claims, { ip: req.ip, userAgent: req.get('user-agent') });
+      if (!out.ok) return res.redirect(302, `/#/signin-failed/${out.reason}`);
+      mw.setSessionCookie(req, res, out.session.token, out.session.expires);
+      return res.redirect(302, '/');
+    }
+    // Linking: only the signed-in person who started it can finish it.
+    if (!req.auth || req.auth.user.id !== done.userId || req.auth.organization.id !== done.organizationId) return res.redirect(302, '/#/google/link-failed/expired');
+    try {
+      identities.completeLink(db, ctxOf(req), done.claims);
+      return res.redirect(302, '/#/google/linked');
+    } catch (err) {
+      if (!(err instanceof ServiceError)) throw err;
+      const code = /someone else/.test(err.message) ? 'taken' : /invited for another/.test(err.message) ? 'invited' : /different Google/.test(err.message) ? 'different' : 'expired';
+      return res.redirect(302, `/#/google/link-failed/${code}`);
+    }
+  }));
 
   r.post('/setup', mw.wrap(async (req, res) => {
     await orgs.setupOrganization(db, { ...req.body, ip: req.ip }, { setupToken: config.setupToken });
@@ -75,6 +119,17 @@ module.exports = function apiRouter(db, { google = null } = {}) {
   r.get('/org', (req, res) => res.json(orgs.getOrganization(db, ctxOf(req))));
   r.patch('/org', (req, res) => res.json(orgs.updateOrganization(db, ctxOf(req), req.body)));
 
+  r.get('/profile/google', (req, res) => res.json(identities.getMine(db, ctxOf(req))));
+  r.post('/profile/google/start', (req, res) => {
+    if (!googleSignIn()) throw new ServiceError(400, 'Signing in with Google is not set up on this server');
+    const { url, state } = google.startIdentity({ origin: originOf(req), purpose: 'link', userId: req.auth.user.id, organizationId: req.auth.organization.id });
+    mw.setStateCookie(req, res, state);
+    res.json({ url });
+  });
+  r.delete('/profile/google', (req, res) => res.json(identities.unlink(db, ctxOf(req))));
+  r.post('/profile/password-login', (req, res) => res.json(identities.setPasswordLogin(db, ctxOf(req), req.auth.user.id, !!(req.body && req.body.enabled))));
+  r.put('/members/:id/google', (req, res) => res.json(identities.setInvite(db, ctxOf(req), idParam(req), req.body && req.body.email)));
+  r.post('/members/:id/password-login', (req, res) => res.json(identities.setPasswordLogin(db, ctxOf(req), idParam(req), !!(req.body && req.body.enabled))));
   r.get('/members', (req, res) => res.json(members.listMembers(db, ctxOf(req))));
   r.post('/members', mw.wrap(async (req, res) => res.json(await members.createMember(db, ctxOf(req), req.body))));
   r.patch('/members/:id', (req, res) => res.json(members.updateMember(db, ctxOf(req), idParam(req), req.body)));
