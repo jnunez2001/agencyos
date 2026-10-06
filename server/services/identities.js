@@ -107,6 +107,7 @@ function setInvite(db, ctx, targetId, email) {
 
 function unlink(db, ctx) {
   return db.transaction(() => {
+    if (requiresGoogle(db, ctx.organizationId) && ctx.actor.role !== 'owner') throw new ServiceError(400, 'Your agency requires Google sign-in, so you cannot unlink it');
     const i = identityOf(db, ctx.actor.id);
     if (!i || !i.subject) throw new ServiceError(400, 'A Google account is not linked yet');
     if (!passwordLoginOf(db, ctx.actor.id)) throw new ServiceError(400, 'Ask an Owner or Admin to reset your password first, so you keep a way to sign in');
@@ -122,6 +123,7 @@ function setPasswordLogin(db, ctx, targetId, enabled) {
   const target = members.findMember(db, ctx.organizationId, targetId);
   if (!self && (!perms.can(ctx.actor.role, 'members.manage') || !perms.canManage(ctx.actor.role, target.role))) throw new ServiceError(403, 'Not allowed');
   if (enabled) throw new ServiceError(400, 'An Owner or Admin resets the password to turn password sign-in back on');
+  if (requiresGoogle(db, ctx.organizationId) && target.role === 'owner') throw new ServiceError(400, 'Owners keep password sign-in as a way back in while Google is required');
   const i = identityOf(db, target.id);
   if (!i || !i.subject) throw new ServiceError(400, 'Link a Google account first, so there is still a way to sign in');
   db.transaction(() => {
@@ -132,4 +134,31 @@ function setPasswordLogin(db, ctx, targetId, enabled) {
   return { passwordLogin: false };
 }
 
-module.exports = { getMine, completeLink, loginWithGoogle, setInvite, unlink, setPasswordLogin };
+const requiresGoogle = (db, organizationId) => !!db.prepare('SELECT require_google AS r FROM organizations WHERE id = ?').get(organizationId).r;
+
+// Owner only. Requires Google sign-in of everyone except Owners. It is refused unless the server can sign in with Google
+// and every active non-Owner is linked or invited, so nobody is locked out. Switching it on ends their current sessions.
+function setRequireGoogle(db, ctx, enabled, { googleAvailable }) {
+  if (!perms.can(ctx.actor.role, 'org.security')) throw new ServiceError(403, 'Not allowed');
+  return db.transaction(() => {
+    const before = requiresGoogle(db, ctx.organizationId);
+    if (enabled) {
+      if (!googleAvailable) throw new ServiceError(400, 'Set up Google sign-in first');
+      const missing = db.prepare(
+        `SELECT u.display_name AS name FROM organization_members m JOIN users u ON u.id = m.user_id
+          WHERE m.organization_id = ? AND m.role != 'owner' AND u.is_active = 1
+            AND NOT EXISTS (SELECT 1 FROM user_identities i WHERE i.user_id = u.id) ORDER BY m.id`
+      ).all(ctx.organizationId).map((r) => r.name);
+      if (missing.length) throw new ServiceError(400, `Invite these people with a Google email first, so they are not locked out: ${missing.join(', ')}`);
+    }
+    db.prepare('UPDATE organizations SET require_google = ? WHERE id = ?').run(enabled ? 1 : 0, ctx.organizationId);
+    if (enabled && !before) {
+      const others = db.prepare("SELECT user_id AS id FROM organization_members WHERE organization_id = ? AND role != 'owner'").all(ctx.organizationId);
+      for (const o of others) auth.destroyUserSessions(db, o.id);
+    }
+    if (enabled !== before) logActivity(db, { ...logCtx(ctx), action: 'org.require_google', objectType: 'organization', objectId: ctx.organizationId, before: { requireGoogle: before }, after: { requireGoogle: !!enabled } });
+    return { requireGoogle: !!enabled };
+  })();
+}
+
+module.exports = { setRequireGoogle, getMine, completeLink, loginWithGoogle, setInvite, unlink, setPasswordLogin };

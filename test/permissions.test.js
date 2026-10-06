@@ -9,6 +9,7 @@ const roles = ['owner', 'admin', 'manager', 'employee', 'contractor'];
 const MATRIX = {
   'org.view': [1, 1, 1, 1, 1],
   'org.update': [1, 1, 0, 0, 0],
+  'org.security': [1, 0, 0, 0, 0],
   'members.list': [1, 1, 1, 1, 0],
   'members.create': [1, 1, 0, 0, 0],
   'members.manage': [1, 1, 0, 0, 0],

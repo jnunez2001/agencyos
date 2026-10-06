@@ -12,6 +12,8 @@ const NOT_CONTRACTOR = ['owner', 'admin', 'manager', 'employee'];
 const ACTIONS = {
   'org.view': ALL,
   'org.update': OWNER_ADMIN,
+  // Security choices for the whole agency, such as requiring Google sign-in.
+  'org.security': ['owner'],
   'members.list': ['owner', 'admin', 'manager', 'employee'],
   'members.create': OWNER_ADMIN,
   'members.manage': OWNER_ADMIN,

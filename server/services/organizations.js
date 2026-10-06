@@ -45,9 +45,9 @@ async function setupOrganization(db, input, { setupToken = '' } = {}) {
 }
 
 function getOrganization(db, ctx) {
-  const row = db.prepare('SELECT id, name, timezone FROM organizations WHERE id = ?').get(ctx.organizationId);
+  const row = db.prepare('SELECT id, name, timezone, require_google AS requireGoogle FROM organizations WHERE id = ?').get(ctx.organizationId);
   if (!row) throw new ServiceError(404, 'Agency not found');
-  return row;
+  return { ...row, requireGoogle: !!row.requireGoogle };
 }
 
 function updateOrganization(db, ctx, patch = {}) {

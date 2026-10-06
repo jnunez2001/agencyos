@@ -72,6 +72,8 @@ async function createMember(db, ctx, input) {
   if (!perms.assignableRoles(ctx.actor.role).includes(input.role)) throw new ServiceError(403, 'Not allowed');
   const googleEmail = input.googleEmail === undefined || input.googleEmail === null || input.googleEmail === '' ? null : store.cleanGoogleEmail(input.googleEmail);
   const hasPassword = typeof input.password === 'string' && input.password !== '';
+  // While Google is required, a non-Owner who only had a password could never sign in.
+  if (input.role !== 'owner' && db.prepare('SELECT require_google AS r FROM organizations WHERE id = ?').get(ctx.organizationId).r && !googleEmail) throw new ServiceError(400, 'Your agency requires Google sign-in. Add their Google email');
   if (!hasPassword && !googleEmail) throw new ServiceError(400, 'Give a temporary password, a Google email, or both');
   if (hasPassword) { const problem = passwordProblem(input.password); if (problem) throw new ServiceError(400, problem); }
   if (googleEmail && store.emailTaken(db, googleEmail)) throw new ServiceError(409, 'That Google email is already used for another member');
@@ -95,6 +97,8 @@ function updateMember(db, ctx, id, patch = {}) {
 
   if (patch.role !== undefined && patch.role !== target.role) {
     if (!perms.ROLES.includes(patch.role)) throw new ServiceError(400, 'Choose a role');
+    // Leaving the Owner role while Google is required needs a way in with Google.
+    if (target.role === 'owner' && patch.role !== 'owner' && db.prepare('SELECT require_google AS r FROM organizations WHERE id = ?').get(ctx.organizationId).r && !db.prepare('SELECT 1 FROM user_identities WHERE user_id = ?').get(target.id)) throw new ServiceError(400, 'Link or invite their Google account first, because your agency requires Google sign-in');
     if (!perms.assignableRoles(ctx.actor.role).includes(patch.role)) throw new ServiceError(403, 'Not allowed');
     if (target.role === 'owner' && activeOwners(db, ctx.organizationId) <= 1) throw new ServiceError(400, 'The agency must keep at least one Owner');
     before.role = target.role;

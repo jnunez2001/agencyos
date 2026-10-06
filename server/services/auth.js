@@ -98,11 +98,15 @@ async function login(db, { username, password, ip, userAgent }) {
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
   // A person who signs in only with Google has password sign-in turned off: it fails the same way as a wrong password.
   const valid = user && user.password_login ? await verifyPassword(password, user.password_hash) : await verifyAgainstDummy(password);
-  const member = user && db.prepare('SELECT organization_id FROM organization_members WHERE user_id = ?').get(user.id);
+  const member = user && db.prepare('SELECT m.organization_id, m.role, o.require_google FROM organization_members m JOIN organizations o ON o.id = m.organization_id WHERE m.user_id = ?').get(user.id);
   if (!user || !valid || !user.is_active || !member) {
     recordFailure(db, username, ip);
     logActivity(db, { actorUserId: user ? user.id : null, action: 'login.failed', source: 'system', ip, after: { username: username.slice(0, 40) } });
     return { ok: false, status: 401, error: 'Wrong username or password' };
+  }
+  // An agency can require Google for everyone but its Owners. This is only said after a correct password.
+  if (member.require_google && member.role !== 'owner') {
+    return { ok: false, status: 403, error: 'Your agency requires signing in with Google' };
   }
   db.prepare('DELETE FROM login_attempts WHERE key = ?').run(`u:${username.toLowerCase()}`);
   const session = createSession(db, { userId: user.id, organizationId: member.organization_id, ip, userAgent });

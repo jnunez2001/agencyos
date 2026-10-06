@@ -116,6 +116,7 @@ module.exports = function apiRouter(db, { google = null } = {}) {
     res.json({ ok: true });
   }));
 
+  r.put('/org/security', (req, res) => res.json(identities.setRequireGoogle(db, ctxOf(req), !!(req.body && req.body.requireGoogle), { googleAvailable: googleSignIn() })));
   r.get('/org', (req, res) => res.json(orgs.getOrganization(db, ctxOf(req))));
   r.patch('/org', (req, res) => res.json(orgs.updateOrganization(db, ctxOf(req), req.body)));
 
