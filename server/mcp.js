@@ -8,6 +8,8 @@ const projects = require('./services/projects');
 const tasks = require('./services/tasks');
 const members = require('./services/members');
 const dashboard = require('./services/dashboard');
+const sops = require('./services/sops');
+const qa = require('./services/qa');
 const { ServiceError } = require('./services/errors');
 const { originOf } = require('./oauthRoutes');
 
@@ -20,7 +22,7 @@ const num = (description) => ({ type: 'integer', description });
 
 const CLIENT_FIELDS = { name: str('Client name'), status: { type: 'string', enum: ['active', 'paused', 'archived'] }, website: str('Website'), industry: str('Industry'), notes: str('Notes') };
 const PROJECT_FIELDS = { name: str('Project name'), description: str('Description'), status: { type: 'string', enum: ['planning', 'active', 'on_hold', 'completed', 'archived'] }, startDate: str('YYYY-MM-DD'), dueDate: str('YYYY-MM-DD'), managerId: num('Team member id') };
-const TASK_FIELDS = { title: str('Task title'), description: str('Description'), status: { type: 'string', enum: ['todo', 'in_progress', 'review', 'done'] }, priority: { type: 'string', enum: ['low', 'normal', 'high', 'urgent'] }, assigneeId: num('Team member id'), dueDate: str('YYYY-MM-DD'), estimateHours: { type: 'number' } };
+const TASK_FIELDS = { sopId: num('SOP to follow (testing or approved)'), qaRequired: { type: 'boolean' }, title: str('Task title'), description: str('Description'), status: { type: 'string', enum: ['todo', 'in_progress', 'review', 'done'] }, priority: { type: 'string', enum: ['low', 'normal', 'high', 'urgent'] }, assigneeId: num('Team member id'), dueDate: str('YYYY-MM-DD'), estimateHours: { type: 'number' } };
 
 const PLAN_NOTE = ' With a key that asks first, the change waits in the AI inbox until a person approves it.';
 const asPlan = (summary, action, args) => ({ summary, steps: [{ action, args }] });
@@ -39,12 +41,19 @@ const TOOLS = [
     run: (db, ctx) => members.listMembers(db, ctx).map((m) => ({ id: m.id, username: m.username, displayName: m.displayName, role: m.role, isActive: m.isActive, jobTitle: m.jobTitle, department: m.department })) },
   { name: 'get_workload', description: 'Each active person\'s open tasks, overdue tasks and open estimated hours against weekly capacity.', schema: obj(),
     run: (db, ctx) => { const d = dashboard.getDashboard(db, ctx); if (!d.workload) throw new ServiceError(403, 'Not allowed'); return { today: d.today, workload: d.workload }; } },
+  { name: 'list_sops', description: 'List the agency\'s SOPs (standard operating procedures), optionally by status, service or text. Each has its current version label.', schema: obj({ status: str('draft, testing, approved or deprecated'), service: str('Service name such as SEO'), q: str('Search text') }), run: (db, ctx, a) => sops.listSops(db, ctx, a) },
+  { name: 'get_sop', description: 'One SOP with its current content (purpose, steps, quality checklist and more) and its version history.', schema: obj({ id: num('SOP id') }, ['id']), run: (db, ctx, a) => sops.getSop(db, ctx, a.id) },
+  { name: 'list_qa_queue', description: 'Work waiting for QA review. Reviewing itself is done by a person in AgencyOS, not by an AI.', schema: obj(), run: (db, ctx) => qa.listQueue(db, ctx) },
 
-  { name: 'apply_changes', write: true, description: `Make several changes at once as one plan that is applied all together or not at all. Steps run in order; give a step "as" to name its result and use "$name" in clientId, projectId, taskId or id of later steps. Actions: create_client, update_client (args.id), create_contact (args.clientId), create_project (args.clientId), update_project (args.id), create_task (args.projectId), update_task (args.id), add_comment (args.taskId). At most 50 steps.${PLAN_NOTE}`,
+  { name: 'apply_changes', write: true, description: `Make several changes at once as one plan that is applied all together or not at all. Steps run in order; give a step "as" to name its result and use "$name" in clientId, projectId, taskId or id of later steps. Actions: create_client, update_client (args.id), create_contact (args.clientId), create_project (args.clientId), update_project (args.id), create_task (args.projectId, optional sopId and qaRequired), update_task (args.id), add_comment (args.taskId), create_sop, update_sop (args.id), add_sop_version (args.id), create_tasks_from_sop (args.sopId and args.projectId, mode task or steps). An AI can draft SOPs (status draft or testing) but only a person can approve one or review work in QA. At most 50 steps.${PLAN_NOTE}`,
     schema: obj({ summary: str('One sentence: what this plan does'), steps: { type: 'array', items: obj({ action: str('One of the actions above'), as: str('Optional name for this step\'s result'), args: { type: 'object' } }, ['action', 'args']) } }, ['summary', 'steps']),
     submit: (a) => ({ summary: a.summary, steps: a.steps }) },
   { name: 'create_client', write: true, description: `Add a client.${PLAN_NOTE}`, schema: obj(CLIENT_FIELDS, ['name']), submit: (a) => asPlan(`Create client "${a.name}"`, 'create_client', a) },
   { name: 'create_project', write: true, description: `Add a project to a client.${PLAN_NOTE}`, schema: obj({ clientId: num('Client id'), ...PROJECT_FIELDS }, ['clientId', 'name']), submit: (a) => asPlan(`Create project "${a.name}"`, 'create_project', a) },
+  { name: 'create_sop', write: true, description: `Draft an SOP: title, service, purpose, whenToUse, inputs, steps (list), checklist (list), expectedOutput, commonMistakes, examples, requiresQa. It starts as a draft for a person to approve.${PLAN_NOTE}`,
+    schema: obj({ title: str('SOP title'), service: str('Service, such as SEO'), requiresQa: { type: 'boolean' }, status: { type: 'string', enum: ['draft', 'testing'] }, purpose: str('Purpose'), whenToUse: str('When to use'), inputs: str('Required inputs'), steps: { type: 'array', items: { type: 'string' } }, checklist: { type: 'array', items: { type: 'string' } }, expectedOutput: str('Expected output'), commonMistakes: str('Common mistakes'), examples: str('Examples') }, ['title']),
+    submit: (a) => asPlan(`Create SOP "${a.title}"`, 'create_sop', a) },
+  { name: 'create_tasks_from_sop', write: true, description: `Start work from an SOP in a project: one task named after it, or one task per step (mode steps).${PLAN_NOTE}`, schema: obj({ sopId: num('SOP id'), projectId: num('Project id'), mode: { type: 'string', enum: ['task', 'steps'] }, assigneeId: num('Team member id'), dueDate: str('YYYY-MM-DD'), priority: { type: 'string', enum: ['low', 'normal', 'high', 'urgent'] } }, ['sopId', 'projectId']), submit: (a) => asPlan('Create tasks from an SOP', 'create_tasks_from_sop', a) },
   { name: 'create_task', write: true, description: `Add a task to a project.${PLAN_NOTE}`, schema: obj({ projectId: num('Project id'), ...TASK_FIELDS }, ['projectId', 'title']), submit: (a) => asPlan(`Create task "${a.title}"`, 'create_task', a) },
   { name: 'update_task', write: true, description: `Change a task (status, assignee, due date and so on).${PLAN_NOTE}`, schema: obj({ id: num('Task id'), ...TASK_FIELDS }, ['id']), submit: (a) => asPlan(`Change task #${a.id}`, 'update_task', a) },
   { name: 'add_comment', write: true, description: `Comment on a task.${PLAN_NOTE}`, schema: obj({ taskId: num('Task id'), body: str('The comment') }, ['taskId', 'body']), submit: (a) => asPlan(`Comment on task #${a.taskId}`, 'add_comment', a) },

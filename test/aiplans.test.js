@@ -229,3 +229,34 @@ test('update steps and the shortcuts work through the same path', async () => {
   assert.equal(projects.getProject(f.db, f.josh, p.id).status, 'active');
   assert.deepEqual([tasks.getTask(f.db, f.josh, t.id).status, tasks.getTask(f.db, f.josh, t.id).priority], ['done', 'low']);
 });
+
+test('SOP actions: an AI drafts SOPs and starts work from them, but a person must approve', async () => {
+  const f = await fixture();
+  const { auth } = keyFor(f, f.josh, 'direct');
+  const sopsSvc = require('../server/services/sops');
+  const r = plans.submitPlan(f.db, auth, { summary: 'Draft an SOP and use it', steps: [
+    { action: 'create_client', as: 'c', args: { name: 'Acme' } },
+    { action: 'create_project', as: 'p', args: { clientId: '$c', name: 'Site' } },
+    { action: 'create_sop', as: 's', args: { title: 'Page Optimization', service: 'SEO', status: 'testing', requiresQa: true, steps: ['Research', 'Write'], checklist: ['Title ok'] } },
+    { action: 'add_sop_version', args: { id: '$s', steps: ['Research', 'Write', 'Publish'], changeNote: 'Added publish' } },
+    { action: 'create_tasks_from_sop', args: { sopId: '$s', projectId: '$p', mode: 'steps' } },
+    { action: 'create_task', args: { projectId: '$p', title: 'One more', sopId: '$s' } },
+  ] });
+  assert.equal(r.status, 'applied');
+  const sop = sopsSvc.listSops(f.db, f.josh)[0];
+  assert.deepEqual([sop.status, sop.version], ['testing', '1.1']);
+  assert.deepEqual(tasks.listTasks(f.db, f.josh).map((t) => t.title).sort(), ['One more', 'Publish', 'Research', 'Write']);
+  assert.ok(tasks.listTasks(f.db, f.josh).every((t) => t.sopId === sop.id && t.qaRequired === true));
+  // approval stays with a person
+  assert.throws(() => plans.submitPlan(f.db, auth, { summary: 's', steps: [{ action: 'update_sop', args: { id: sop.id, status: 'approved' } }] }), /Step 1.*person/i);
+  assert.equal(sopsSvc.listSops(f.db, f.josh)[0].status, 'testing');
+  // and so does reviewing
+  const t = tasks.listTasks(f.db, f.josh)[0];
+  tasks.updateTask(f.db, f.josh, t.id, { status: 'review' });
+  assert.throws(() => plans.submitPlan(f.db, auth, { summary: 's', steps: [{ action: 'update_task', args: { id: t.id, status: 'done' } }] }), /Step 1.*needs QA/i);
+  assert.throws(() => plans.submitPlan(f.db, auth, { summary: 's', steps: [{ action: 'review_task', args: { id: t.id, result: 'approved' } }] }), /unknown action/i);
+  // the inbox describes the new steps
+  const { auth: ask } = keyFor(f, f.josh, 'propose');
+  const p = plans.submitPlan(f.db, ask, { summary: 'Another SOP', steps: [{ action: 'create_sop', args: { title: 'Link Building', status: 'draft' } }, { action: 'update_sop', args: { id: sop.id, service: 'Local SEO' } }] });
+  assert.deepEqual(p.lines, ['Create SOP "Link Building" (draft)', 'Change SOP "Page Optimization": service']);
+});

@@ -15,6 +15,8 @@ const tasks = require('../services/tasks');
 const apikeys = require('../services/apikeys');
 const aiplans = require('../services/aiplans');
 const oauth = require('../services/oauth');
+const sops = require('../services/sops');
+const qa = require('../services/qa');
 const { ServiceError } = require('../services/errors');
 
 function idParam(req) {
@@ -98,6 +100,16 @@ module.exports = function apiRouter(db) {
   r.delete('/tasks/:id', (req, res) => res.json(tasks.deleteTask(db, ctxOf(req), idParam(req))));
   r.get('/tasks/:id/comments', (req, res) => res.json(tasks.listComments(db, ctxOf(req), idParam(req))));
   r.post('/tasks/:id/comments', (req, res) => res.json(tasks.addComment(db, ctxOf(req), idParam(req), req.body)));
+
+  r.get('/sops', (req, res) => res.json(sops.listSops(db, ctxOf(req), { status: req.query.status, service: req.query.service, q: req.query.q })));
+  r.post('/sops', (req, res) => res.json(sops.createSop(db, ctxOf(req), req.body)));
+  r.get('/sops/:id', (req, res) => res.json(sops.getSop(db, ctxOf(req), idParam(req))));
+  r.patch('/sops/:id', (req, res) => res.json(sops.updateSop(db, ctxOf(req), idParam(req), req.body)));
+  r.post('/sops/:id/versions', (req, res) => res.json(sops.addVersion(db, ctxOf(req), idParam(req), req.body)));
+  r.get('/sops/:id/versions/:versionId', (req, res) => res.json(sops.getVersion(db, ctxOf(req), idParam(req), req.params.versionId)));
+  r.post('/sops/:id/tasks', (req, res) => res.json(tasks.createTasksFromSop(db, ctxOf(req), idParam(req), req.body)));
+  r.get('/qa', (req, res) => res.json(qa.listQueue(db, ctxOf(req))));
+  r.post('/tasks/:id/qa', (req, res) => res.json(qa.reviewTask(db, ctxOf(req), idParam(req), req.body)));
 
   r.get('/api-keys', (req, res) => res.json(apikeys.listKeys(db, ctxOf(req))));
   r.post('/api-keys', (req, res) => res.json(apikeys.createKey(db, ctxOf(req), req.body)));

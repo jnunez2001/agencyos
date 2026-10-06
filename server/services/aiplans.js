@@ -9,9 +9,10 @@ const perms = require('./permissions');
 const clients = require('./clients');
 const projects = require('./projects');
 const tasks = require('./tasks');
+const sops = require('./sops');
 
 const MAX_STEPS = 50;
-const REF_KEYS = ['clientId', 'projectId', 'taskId', 'id'];
+const REF_KEYS = ['clientId', 'projectId', 'taskId', 'sopId', 'id'];
 const NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;
 
 const withId = (args, fn) => { const { id, ...rest } = args; return fn(id, rest); };
@@ -26,6 +27,10 @@ const ACTIONS = {
   create_task: (db, ctx, a) => tasks.createTask(db, ctx, a),
   update_task: (db, ctx, a) => withId(a, (id, rest) => tasks.updateTask(db, ctx, id, rest)),
   add_comment: (db, ctx, a) => { const { taskId, ...rest } = a; return tasks.addComment(db, ctx, taskId, rest); },
+  create_sop: (db, ctx, a) => sops.createSop(db, ctx, a),
+  update_sop: (db, ctx, a) => withId(a, (id, rest) => sops.updateSop(db, ctx, id, rest)),
+  add_sop_version: (db, ctx, a) => withId(a, (id, rest) => sops.addVersion(db, ctx, id, rest)),
+  create_tasks_from_sop: (db, ctx, a) => { const { sopId, ...rest } = a; return tasks.createTasksFromSop(db, ctx, sopId, rest); },
 };
 
 const fail = (status, message) => { throw new ServiceError(status, message); };
@@ -71,7 +76,9 @@ function execute(db, ctx, steps) {
   return steps.map((s, i) => {
     const at = `Step ${i + 1} (${s.action})`;
     try {
-      const result = ACTIONS[s.action](db, ctx, resolveRefs(s.args, aliases, at));
+      const raw = ACTIONS[s.action](db, ctx, resolveRefs(s.args, aliases, at));
+      // starting work from an SOP makes several tasks, which later steps cannot point at
+      const result = Array.isArray(raw) ? { id: null, name: `${raw.length} ${raw.length === 1 ? 'task' : 'tasks'}` } : raw;
       if (s.as) aliases[s.as] = result.id;
       return { action: s.action, as: s.as || null, id: result.id == null ? null : result.id, name: result.name || result.title || null };
     } catch (err) {
@@ -114,6 +121,10 @@ function describe(db, organizationId, steps) {
       case 'update_project': line = `Change project ${nameOf('projects', 'name', a.id)}: ${changed}`; break;
       case 'create_task': line = `Create task "${a.title}" in ${nameOf('projects', 'name', a.projectId)}`; break;
       case 'update_task': line = `Change task ${nameOf('tasks', 'title', a.id)}: ${changed}`; break;
+      case 'create_sop': line = `Create SOP "${a.title}"${a.status ? ` (${a.status})` : ''}`; break;
+      case 'update_sop': line = `Change SOP ${nameOf('sops', 'title', a.id)}: ${changed}`; break;
+      case 'add_sop_version': line = `Add a new version to SOP ${nameOf('sops', 'title', a.id)}${a.changeNote ? `: ${trim(a.changeNote)}` : ''}`; break;
+      case 'create_tasks_from_sop': line = `Create ${a.mode === 'steps' ? 'a task for each step of' : 'a task from'} SOP ${nameOf('sops', 'title', a.sopId)} in ${nameOf('projects', 'name', a.projectId)}`; break;
       case 'add_comment': line = `Comment on ${nameOf('tasks', 'title', a.taskId)}: ${trim(a.body || '')}`; break;
       default: line = s.action;
     }

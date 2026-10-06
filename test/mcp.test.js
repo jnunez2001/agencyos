@@ -68,9 +68,9 @@ test('tools/list shows write tools only to keys that can write', async () => {
   const app = await setUp();
   const names = async (access) => (await mcp(app, (await withKey(app, access, access)).token).rpc('tools/list')).result.tools.map((t) => t.name);
   const read = await names('read');
-  assert.deepEqual(read, ['list_clients', 'get_client', 'list_projects', 'get_project', 'list_tasks', 'get_task', 'list_team', 'get_workload']);
+  assert.deepEqual(read, ['list_clients', 'get_client', 'list_projects', 'get_project', 'list_tasks', 'get_task', 'list_team', 'get_workload', 'list_sops', 'get_sop', 'list_qa_queue']);
   const propose = await names('propose');
-  assert.deepEqual(propose.slice(0, 8), read);
+  assert.deepEqual(propose.slice(0, read.length), read);
   assert.ok(['apply_changes', 'create_client', 'create_project', 'create_task', 'update_task', 'add_comment'].every((n) => propose.includes(n)));
   const tools = (await mcp(app, (await withKey(app, 'read')).token).rpc('tools/list')).result.tools;
   assert.ok(tools.every((t) => t.description && t.inputSchema && t.inputSchema.type === 'object'));
@@ -172,5 +172,33 @@ test('everyone makes personal keys and sees only their own; Owner and Admin see 
   assert.equal((await c.tool('get_workload')).isError, true);
   assert.equal((await c.tool('list_team')).data.length, 5);
   assert.equal((await mcp(app, null).post({ jsonrpc: '2.0', id: 1, method: 'ping' })).status, 401);
+  await app.close();
+});
+
+test('SOP and QA tools: read for every key, drafting through plans, reviewing never', async () => {
+  const app = await setUp();
+  const direct = mcp(app, (await withKey(app, 'direct', 'd')).token);
+  const r = await direct.tool('create_sop', { title: 'Page Optimization', service: 'SEO', status: 'testing', requiresQa: true, steps: ['Research', 'Write'], checklist: ['Title ok'] });
+  assert.equal(r.data.status, 'applied');
+  const read = mcp(app, (await withKey(app, 'read', 'r')).token);
+  const list = (await read.tool('list_sops')).data;
+  assert.deepEqual([list.length, list[0].title, list[0].status, list[0].version], [1, 'Page Optimization', 'testing', '1.0']);
+  assert.deepEqual((await read.tool('get_sop', { id: list[0].id })).data.content.checklist, ['Title ok']);
+  assert.equal((await read.tool('list_sops', { q: 'nothing' })).data.length, 0);
+  assert.deepEqual((await read.tool('list_qa_queue')).data, []);
+  // a person approves, then the AI starts work from it
+  assert.equal((await app.owner.call('PATCH', `/sops/${list[0].id}`, { status: 'approved' })).data.status, 'approved');
+  const client = (await direct.tool('create_client', { name: 'Acme' })).data;
+  assert.equal(client.status, 'applied');
+  const proj = (await app.owner.call('POST', '/projects', { clientId: (await app.owner.call('GET', '/clients')).data[0].id, name: 'Site' })).data;
+  const made = await direct.tool('create_tasks_from_sop', { sopId: list[0].id, projectId: proj.id, mode: 'steps' });
+  assert.equal(made.data.status, 'applied');
+  assert.equal((await read.tool('list_tasks')).data.length, 2);
+  // an AI cannot approve an SOP or review work
+  assert.equal((await direct.tool('apply_changes', { summary: 's', steps: [{ action: 'update_sop', args: { id: list[0].id, status: 'deprecated' } }] })).data.status, 'applied');
+  const bad = await direct.tool('apply_changes', { summary: 's', steps: [{ action: 'update_sop', args: { id: list[0].id, status: 'approved' } }] });
+  assert.equal(bad.isError, true);
+  assert.match(bad.text, /person/i);
+  assert.equal((await direct.tool('review_task', { id: 1 })).isError, true);
   await app.close();
 });
