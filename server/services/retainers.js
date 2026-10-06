@@ -7,6 +7,7 @@ const { cleanDate, diff } = require('./validate');
 const clients = require('./clients');
 const { today, addDays } = require('./dates');
 const perms = require('./permissions');
+const notifications = require('./notifications');
 
 const FIELDS = ['hoursAllocated', 'startDate', 'isActive'];
 const WARN_AT = 80;
@@ -107,4 +108,19 @@ function listUsage(db, ctx, { clientId } = {}) {
   return rows.map((r) => usageOf(db, ctx, r)).sort((a, b) => b.percent - a.percent);
 }
 
-module.exports = { WARN_AT, OVER_AT, periodFor, getRetainer, saveRetainer, listUsage };
+// Called when billable time is approved. Tells managers and the client's account owner once per period when the retainer
+// reaches 80 percent and once when it reaches 100 percent. Time from an earlier period does not count here.
+function notifyUsage(db, ctx, clientId, entryDate) {
+  const row = active(db, ctx, clientId);
+  if (!row) return 0;
+  const u = usageOf(db, ctx, row);
+  if (!u.started || entryDate < u.period.from || entryDate > u.period.to) return 0;
+  const level = u.usedHours >= u.allocatedHours ? OVER_AT : u.usedHours * 100 >= u.allocatedHours * WARN_AT ? WARN_AT : 0;
+  if (!level) return 0;
+  const owner = db.prepare('SELECT account_owner_id AS id FROM clients WHERE organization_id = ? AND id = ?').get(ctx.organizationId, row.clientId);
+  const title = level === OVER_AT ? `${u.clientName} has used all of its retainer hours` : `${u.clientName} has used ${u.percent} percent of its retainer`;
+  const body = level === OVER_AT ? `${u.usedHours} of ${u.allocatedHours} hours used this period` : `${u.usedHours} of ${u.allocatedHours} hours used, ${u.remainingHours} left this period`;
+  return notifications.notify(db, ctx, { userIds: [...notifications.peopleWith(db, ctx.organizationId, 'retainers.manage'), owner && owner.id], type: 'retainer_limit', title, body, link: `#/clients/${row.clientId}`, objectType: 'client', objectId: row.clientId, dedupeKey: `retainer:${row.clientId}:${u.period.from}:${level}`, once: true });
+}
+
+module.exports = { notifyUsage, WARN_AT, OVER_AT, periodFor, getRetainer, saveRetainer, listUsage };

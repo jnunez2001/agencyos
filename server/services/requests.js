@@ -5,14 +5,16 @@ const { logActivity } = require('./audit');
 const { ServiceError } = require('./errors');
 const { cleanText, cleanOptional, cleanEnum, cleanDate, cleanTeamMember, diff } = require('./validate');
 const clients = require('./clients');
+const { today } = require('./dates');
 const projects = require('./projects');
 const tasks = require('./tasks');
 const perms = require('./permissions');
 const notifications = require('./notifications');
 
 const STATUSES = ['new', 'reviewing', 'approved', 'in_progress', 'waiting', 'completed', 'rejected'];
+const PRIORITIES = ['low', 'normal', 'high', 'urgent'];
 const STAFF_STATUSES = ['new', 'reviewing'];
-const FIELDS = ['title', 'description', 'status', 'clientId', 'projectId', 'requestedBy', 'dueDate', 'ownerId'];
+const FIELDS = ['title', 'description', 'status', 'clientId', 'projectId', 'requestedBy', 'dueDate', 'ownerId', 'priority', 'source', 'receivedOn'];
 
 const logCtx = (ctx) => ({ organizationId: ctx.organizationId, actorUserId: ctx.actor.id, source: ctx.source || 'web', ip: ctx.ip || null });
 const need = (ctx, action) => { if (!perms.can(ctx.actor.role, action)) throw new ServiceError(403, 'Not allowed'); };
@@ -20,7 +22,7 @@ const manages = (ctx) => perms.can(ctx.actor.role, 'requests.manage');
 
 const SELECT = `
   SELECT r.id, r.title, r.description, r.status, r.client_id AS clientId, c.name AS clientName, r.project_id AS projectId, p.name AS projectName,
-         r.requested_by AS requestedBy, r.due_date AS dueDate, r.owner_id AS ownerId, ou.display_name AS ownerName,
+         r.requested_by AS requestedBy, r.due_date AS dueDate, r.priority, r.source, r.received_on AS receivedOn, r.owner_id AS ownerId, ou.display_name AS ownerName,
          r.source_note_id AS sourceNoteId, n.title AS sourceNoteTitle, r.task_id AS taskId, t.title AS taskTitle, t.status AS taskStatus,
          r.created_by AS createdBy, cu.display_name AS createdByName, r.created_at AS createdAt, r.updated_at AS updatedAt
     FROM client_requests r
@@ -45,12 +47,13 @@ function find(db, ctx, id) {
 
 function getRequest(db, ctx, id) { need(ctx, 'requests.view'); return shape(ctx, find(db, ctx, id)); }
 
-function listRequests(db, ctx, { clientId, projectId, status, open, q } = {}) {
+function listRequests(db, ctx, { clientId, projectId, status, priority, open, q } = {}) {
   need(ctx, 'requests.view');
   const where = []; const params = [ctx.organizationId];
   if (clientId) { where.push('r.client_id = ?'); params.push(Number(clientId)); }
   if (projectId) { where.push('r.project_id = ?'); params.push(Number(projectId)); }
   if (status) { cleanEnum(status, STATUSES, 'status'); where.push('r.status = ?'); params.push(status); }
+  if (priority) { where.push('r.priority = ?'); params.push(cleanEnum(priority, PRIORITIES, 'priority')); }
   if (open) where.push("r.status NOT IN ('completed','rejected')");
   if (q) { where.push("r.title LIKE ? ESCAPE '\\'"); params.push(`%${String(q).replace(/[\\%_]/g, '\\$&')}%`); }
   return db.prepare(`${SELECT} ${where.map((w) => `AND ${w}`).join(' ')} ORDER BY r.id DESC LIMIT 300`).all(...params).map((r) => shape(ctx, r));
@@ -75,10 +78,12 @@ function createRequest(db, ctx, input = {}, { sourceNoteId = null } = {}) {
     const next = {
       title: cleanText(input.title, 'Title', 1, 200), description: cleanOptional(input.description, 'Description', 10000), status,
       requestedBy: cleanOptional(input.requestedBy, 'Requested by', 120), dueDate: cleanDate(input.dueDate, 'Due date'),
+      priority: input.priority === undefined ? 'normal' : cleanEnum(input.priority, PRIORITIES, 'priority'), source: cleanOptional(input.source, 'Source', 200),
+      receivedOn: cleanDate(input.receivedOn, 'Received on') || today(db, ctx),
       ownerId: cleanTeamMember(db, ctx.organizationId, input.ownerId), ...cleanLinks(db, ctx, input.clientId, input.projectId),
     };
-    const id = Number(db.prepare('INSERT INTO client_requests (organization_id, client_id, project_id, title, description, status, requested_by, due_date, owner_id, source_note_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(ctx.organizationId, next.clientId, next.projectId, next.title, next.description, next.status, next.requestedBy, next.dueDate, next.ownerId, sourceNoteId, ctx.actor.id).lastInsertRowid);
+    const id = Number(db.prepare('INSERT INTO client_requests (organization_id, client_id, project_id, title, description, status, requested_by, due_date, owner_id, source_note_id, created_by, priority, source, received_on) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(ctx.organizationId, next.clientId, next.projectId, next.title, next.description, next.status, next.requestedBy, next.dueDate, next.ownerId, sourceNoteId, ctx.actor.id, next.priority, next.source, next.receivedOn).lastInsertRowid);
     logActivity(db, { ...logCtx(ctx), action: 'request.create', objectType: 'client_request', objectId: id, after: { title: next.title, clientId: next.clientId, status: next.status, ...(sourceNoteId ? { sourceNoteId } : {}) } });
     const accountOwner = db.prepare('SELECT account_owner_id AS id FROM clients WHERE organization_id = ? AND id = ?').get(ctx.organizationId, next.clientId);
     notifications.notify(db, ctx, { userIds: [accountOwner && accountOwner.id], type: 'request_new', title: `New client request: ${next.title}`, link: `#/requests/${id}`, objectType: 'client_request', objectId: id, dedupeKey: `request_new:${id}` });
@@ -102,6 +107,9 @@ function updateRequest(db, ctx, id, patch = {}) {
     }
     if (patch.requestedBy !== undefined) next.requestedBy = cleanOptional(patch.requestedBy, 'Requested by', 120);
     if (patch.dueDate !== undefined) next.dueDate = cleanDate(patch.dueDate, 'Due date');
+    if (patch.priority !== undefined) next.priority = cleanEnum(patch.priority, PRIORITIES, 'priority');
+    if (patch.source !== undefined) next.source = cleanOptional(patch.source, 'Source', 200);
+    if (patch.receivedOn !== undefined) { next.receivedOn = cleanDate(patch.receivedOn, 'Received on'); if (!next.receivedOn) throw new ServiceError(400, 'Received on is required'); }
     if (patch.ownerId !== undefined) next.ownerId = cleanTeamMember(db, ctx.organizationId, patch.ownerId);
     if (patch.clientId !== undefined || patch.projectId !== undefined) {
       const clientId = patch.clientId !== undefined ? patch.clientId : current.clientId;
@@ -110,8 +118,8 @@ function updateRequest(db, ctx, id, patch = {}) {
     }
     const d = diff(current, next, FIELDS);
     if (!d.changed) return row;
-    db.prepare("UPDATE client_requests SET title = ?, description = ?, status = ?, client_id = ?, project_id = ?, requested_by = ?, due_date = ?, owner_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE organization_id = ? AND id = ?")
-      .run(next.title, next.description, next.status, next.clientId, next.projectId, next.requestedBy, next.dueDate, next.ownerId, ctx.organizationId, current.id);
+    db.prepare("UPDATE client_requests SET title = ?, description = ?, status = ?, client_id = ?, project_id = ?, requested_by = ?, due_date = ?, owner_id = ?, priority = ?, source = ?, received_on = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE organization_id = ? AND id = ?")
+      .run(next.title, next.description, next.status, next.clientId, next.projectId, next.requestedBy, next.dueDate, next.ownerId, next.priority, next.source, next.receivedOn, ctx.organizationId, current.id);
     logActivity(db, { ...logCtx(ctx), action: 'request.update', objectType: 'client_request', objectId: current.id, before: d.before, after: d.after });
     if (d.after.ownerId) notifications.notify(db, ctx, { userIds: next.ownerId, type: 'request_assigned', title: `Client request for you: ${next.title}`, link: `#/requests/${current.id}`, objectType: 'client_request', objectId: current.id, dedupeKey: `request_assigned:${current.id}` });
     return getRequest(db, ctx, id);
@@ -152,4 +160,4 @@ function deleteRequest(db, ctx, id) {
   })();
 }
 
-module.exports = { STATUSES, listRequests, getRequest, createRequest, updateRequest, convertToTask, deleteRequest };
+module.exports = { STATUSES, PRIORITIES, listRequests, getRequest, createRequest, updateRequest, convertToTask, deleteRequest };

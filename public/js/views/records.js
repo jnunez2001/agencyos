@@ -2,7 +2,7 @@
 // The Decisions and Follow-ups tabs of the Meetings screen, and the tab bar they share with the notes list.
 import { h, icon, openSheet } from '../dom.js';
 import { api } from '../api.js';
-import { field, selectField, textareaField, sheetForm, confirmButton, pill, formatDay } from '../ui.js';
+import { field, selectField, textareaField, sheetForm, confirmButton, pill, formatDay, PRIORITY_LABEL } from '../ui.js';
 
 const DECISION_STATUS = { active: 'Active', reversed: 'Reversed' };
 const FOLLOWUP_STATUS = { open: 'Open', done: 'Done', cancelled: 'Cancelled' };
@@ -34,9 +34,10 @@ export async function openDecisionForm(session, { decision } = {}, onSaved) {
     const title = field('Decision', { name: 'title', maxlength: 200, required: true, value: decision ? decision.title : '' });
     const date = field('Decided on', { name: 'decidedOn', type: 'date', required: true, value: decision ? decision.decidedOn : new Date().toISOString().slice(0, 10) });
     const status = decision ? selectField('Status', Object.entries(DECISION_STATUS), decision.status, { name: 'status' }) : null;
+    const people = field('People involved', { name: 'peopleInvolved', maxlength: 500, value: decision ? decision.peopleInvolved : '' });
     const details = textareaField('Why, and the details', { name: 'details', maxlength: 10000 }, decision ? decision.details : '');
-    return sheetForm([title, date, links.row, status, details], decision ? 'Save' : 'Add decision', async () => {
-      const body = { title: title.input.value, decidedOn: date.input.value, details: details.input.value, ...links.ids() };
+    return sheetForm([title, date, links.row, people, status, details], decision ? 'Save' : 'Add decision', async () => {
+      const body = { title: title.input.value, decidedOn: date.input.value, details: details.input.value, peopleInvolved: people.input.value, ...links.ids() };
       if (status) body.status = status.input.value;
       await (decision ? api('PATCH', `/decisions/${decision.id}`, body) : api('POST', '/decisions', body));
       await onSaved();
@@ -53,7 +54,7 @@ export async function decisionsPage(session, rerender, state) {
       manage && h('div', { class: 'head-actions' }, h('button', { class: 'btn btn-primary', type: 'button', onclick: () => openDecisionForm(session, {}, rerender).catch((e) => alert(e.message)) }, icon('plus'), 'New decision'))),
     tabBar(session, 'decisions'), chips,
     h('section', { class: 'panel list' }, list.length ? list.map((d) => h('div', { class: 'row static' },
-      h('div', { class: 'grow' }, h('div', { class: 'row-title' }, d.title), h('div', { class: 'row-sub' }, [formatDay(d.decidedOn), d.clientName, d.projectName].filter(Boolean).join(', ')),
+      h('div', { class: 'grow' }, h('div', { class: 'row-title' }, d.title), h('div', { class: 'row-sub' }, [formatDay(d.decidedOn), d.clientName, d.projectName, d.peopleInvolved && `with ${d.peopleInvolved}`].filter(Boolean).join(', ')),
         d.details && h('p', { class: 'prose' }, d.details),
         d.sourceNoteId && h('a', { class: 'link', href: `#/meetings/${d.sourceNoteId}` }, `From ${d.sourceNoteTitle || 'meeting notes'}`)),
       pill('ds', d.status, DECISION_STATUS[d.status]),
@@ -68,10 +69,11 @@ export async function openFollowUpForm(session, { followUp } = {}, onSaved) {
     const title = field('Follow-up', { name: 'title', maxlength: 200, required: true, value: followUp ? followUp.title : '' });
     const due = field('Due date', { name: 'dueDate', type: 'date', value: followUp && followUp.dueDate ? followUp.dueDate : '' });
     const who = selectField('Assigned to', [['', 'Nobody'], ...members.filter((m) => m.isActive || (followUp && followUp.assigneeId === m.id)).map((m) => [m.id, m.displayName])], followUp && followUp.assigneeId ? followUp.assigneeId : session.user.id, { name: 'assigneeId' });
+    const priority = selectField('Priority', Object.entries(PRIORITY_LABEL), followUp ? followUp.priority : 'normal', { name: 'priority' });
     const status = followUp ? selectField('Status', Object.entries(FOLLOWUP_STATUS), followUp.status, { name: 'status' }) : null;
     const details = textareaField('Details', { name: 'details', maxlength: 10000 }, followUp ? followUp.details : '');
-    return sheetForm([title, h('div', { class: 'two' }, who.el, due.el), links.row, status, details], followUp ? 'Save' : 'Add follow-up', async () => {
-      const body = { title: title.input.value, dueDate: due.input.value || null, assigneeId: who.input.value === '' ? null : Number(who.input.value), details: details.input.value, ...links.ids() };
+    return sheetForm([title, h('div', { class: 'two' }, who.el, due.el), h('div', { class: 'two' }, priority.el, status ? status.el : h('div')), links.row, details], followUp ? 'Save' : 'Add follow-up', async () => {
+      const body = { title: title.input.value, dueDate: due.input.value || null, assigneeId: who.input.value === '' ? null : Number(who.input.value), priority: priority.input.value, details: details.input.value, ...links.ids() };
       if (status) body.status = status.input.value;
       await (followUp ? api('PATCH', `/follow-ups/${followUp.id}`, body) : api('POST', '/follow-ups', body));
       await onSaved();
@@ -93,7 +95,10 @@ export async function followUpsPage(session, rerender, state) {
     h('section', { class: 'panel list' }, list.length ? list.map((f) => h('div', { class: 'row static' },
       f.canEdit && h('input', { type: 'checkbox', checked: f.status === 'done', 'aria-label': `Mark ${f.title} done`, onchange: toggle(f) }),
       h('div', { class: 'grow' }, h('div', { class: 'row-title' }, f.title), h('div', { class: 'row-sub' }, [f.assigneeName, f.dueDate && `${f.isOverdue ? 'Overdue, ' : 'Due '}${formatDay(f.dueDate)}`, f.clientName].filter(Boolean).join(', ')),
+        f.requestId && f.requestTitle && h('a', { class: 'link', href: `#/requests/${f.requestId}` }, `Request: ${f.requestTitle}`),
+        f.taskId && f.taskTitle && h('a', { class: 'link', href: `#/tasks/${f.taskId}` }, `Task: ${f.taskTitle}`),
         f.sourceNoteId && session.can['notes.view'] && h('a', { class: 'link', href: `#/meetings/${f.sourceNoteId}` }, `From ${f.sourceNoteTitle || 'meeting notes'}`)),
+      f.priority && f.priority !== 'normal' && pill('pr', f.priority, PRIORITY_LABEL[f.priority]),
       f.status !== 'open' && pill('fs', f.status, FOLLOWUP_STATUS[f.status]),
       f.canEdit && h('button', { class: 'btn', type: 'button', onclick: () => openFollowUpForm(session, { followUp: f }, rerender).catch((e) => alert(e.message)) }, 'Edit'),
       f.canDelete && confirmButton('Delete', 'Confirm', async () => { try { await api('DELETE', `/follow-ups/${f.id}`); await rerender(); } catch (e) { alert(e.message); } }))) : h('p', { class: 'muted pad' }, 'No follow-ups here.')));

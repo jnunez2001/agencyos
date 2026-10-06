@@ -2,7 +2,7 @@
 // Client requests: the list, a request page with its status and Convert to Task, and the add and edit form.
 import { h, icon, openSheet, goAfterSheets } from '../dom.js';
 import { api } from '../api.js';
-import { field, selectField, textareaField, sheetForm, confirmButton, pill, formatDay } from '../ui.js';
+import { field, selectField, textareaField, sheetForm, confirmButton, pill, formatDay, PRIORITY_LABEL, priorityPill } from '../ui.js';
 
 export const REQUEST_STATUS_LABEL = { new: 'New', reviewing: 'Reviewing', approved: 'Approved', in_progress: 'In progress', waiting: 'Waiting', completed: 'Completed', rejected: 'Rejected' };
 const STAFF_STATUSES = ['new', 'reviewing'];
@@ -26,12 +26,15 @@ export async function openRequestForm(session, { request, clientId } = {}, onSav
     loadProjects();
     const by = field('Asked by', { name: 'requestedBy', maxlength: 120, value: request ? request.requestedBy : '' });
     const due = field('Wanted by', { name: 'dueDate', type: 'date', value: request && request.dueDate ? request.dueDate : '' });
+    const priority = selectField('Priority', Object.entries(PRIORITY_LABEL), request ? request.priority : 'normal', { name: 'priority' });
+    const source = field('Where it came from', { name: 'source', maxlength: 200, placeholder: 'Client call, email', value: request ? request.source : '' });
+    const received = field(request ? 'Received on' : 'Received on (blank is today)', { name: 'receivedOn', type: 'date', value: request && request.receivedOn ? request.receivedOn : '' });
     const owner = manage ? selectField('Who handles it', [['', 'Nobody yet'], ...members.filter((m) => m.isActive || (request && request.ownerId === m.id)).map((m) => [m.id, m.displayName])], request && request.ownerId ? request.ownerId : '', { name: 'ownerId' }) : null;
     const statuses = manage ? Object.entries(REQUEST_STATUS_LABEL) : STAFF_STATUSES.map((s) => [s, REQUEST_STATUS_LABEL[s]]);
     const status = selectField('Status', statuses, request ? request.status : 'new', { name: 'status' });
     const description = textareaField('Details', { name: 'description', maxlength: 10000 }, request ? request.description : '');
-    return sheetForm([title, h('div', { class: 'two' }, client.el, project.el), h('div', { class: 'two' }, by.el, due.el), owner, request && status, description], request ? 'Save' : 'Add request', async () => {
-      const body = { title: title.input.value, clientId: Number(client.input.value), projectId: project.input.value === '' ? null : Number(project.input.value), requestedBy: by.input.value, dueDate: due.input.value || null, description: description.input.value };
+    return sheetForm([title, h('div', { class: 'two' }, client.el, project.el), h('div', { class: 'two' }, by.el, due.el), h('div', { class: 'two' }, source.el, received.el), priority.el, owner, request && status, description], request ? 'Save' : 'Add request', async () => {
+      const body = { title: title.input.value, clientId: Number(client.input.value), projectId: project.input.value === '' ? null : Number(project.input.value), requestedBy: by.input.value, dueDate: due.input.value || null, priority: priority.input.value, source: source.input.value, receivedOn: received.input.value || undefined, description: description.input.value };
       if (owner) body.ownerId = owner.input.value === '' ? null : Number(owner.input.value);
       if (request) body.status = status.input.value;
       const saved = request ? await api('PATCH', `/requests/${request.id}`, body) : await api('POST', '/requests', body);
@@ -64,6 +67,8 @@ async function requestPage(session, id, rerender) {
     h('dt', {}, 'Client'), h('dd', {}, session.can['clients.view'] ? h('a', { class: 'link', href: `#/clients/${r.clientId}` }, r.clientName) : r.clientName),
     r.projectName && h('dt', {}, 'Project'), r.projectName && h('dd', {}, h('a', { class: 'link', href: `#/projects/${r.projectId}` }, r.projectName)),
     r.requestedBy && h('dt', {}, 'Asked by'), r.requestedBy && h('dd', {}, r.requestedBy),
+    r.source && h('dt', {}, 'Came from'), r.source && h('dd', {}, r.source),
+    r.receivedOn && h('dt', {}, 'Received'), r.receivedOn && h('dd', {}, formatDay(r.receivedOn)),
     r.dueDate && h('dt', {}, 'Wanted by'), r.dueDate && h('dd', {}, formatDay(r.dueDate)),
     h('dt', {}, 'Handled by'), h('dd', {}, r.ownerName || 'Nobody yet'),
     r.sourceNoteId && h('dt', {}, 'From meeting'), r.sourceNoteId && h('dd', {}, h('a', { class: 'link', href: `#/meetings/${r.sourceNoteId}` }, r.sourceNoteTitle || 'Meeting notes')),
@@ -73,7 +78,7 @@ async function requestPage(session, id, rerender) {
   if (statusSelect) statusSelect.input.addEventListener('change', act(() => api('PATCH', `/requests/${r.id}`, { status: statusSelect.input.value })));
   return h('div', { class: 'page' },
     h('a', { class: 'back', href: '#/requests' }, icon('back'), 'Requests'),
-    h('div', { class: 'page-head' }, h('div', {}, h('h1', { class: 'page-title' }, r.title), h('div', { class: 'head-meta' }, requestPill(r.status))),
+    h('div', { class: 'page-head' }, h('div', {}, h('h1', { class: 'page-title' }, r.title), h('div', { class: 'head-meta' }, requestPill(r.status), priorityPill(r.priority))),
       h('div', { class: 'head-actions' },
         r.canEdit && h('button', { class: 'btn', type: 'button', onclick: () => openRequestForm(session, { request: r }, rerender).catch((e) => alert(e.message)) }, 'Edit'),
         r.canConvert && h('button', { class: 'btn btn-primary', type: 'button', onclick: () => openConvert(session, r, rerender).catch((e) => alert(e.message)) }, 'Convert to task'),
@@ -96,5 +101,5 @@ export async function requestsView(session, { param, rerender }) {
     chips, h('div', { class: 'filters' }, pick),
     h('section', { class: 'panel list' }, list.length ? list.map((r) => h('a', { class: 'row', href: `#/requests/${r.id}` },
       h('div', { class: 'grow' }, h('div', { class: 'row-title' }, r.title), h('div', { class: 'row-sub' }, [r.clientName, r.requestedBy && `asked by ${r.requestedBy}`, r.taskId && 'has a task'].filter(Boolean).join(', '))),
-      requestPill(r.status), icon('chevron'))) : h('p', { class: 'muted pad' }, 'No requests yet. They come from meeting notes, or add one here.')));
+      r.priority !== 'normal' && priorityPill(r.priority), requestPill(r.status), icon('chevron'))) : h('p', { class: 'muted pad' }, 'No requests yet. They come from meeting notes, or add one here.')));
 }

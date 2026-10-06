@@ -26,6 +26,10 @@ function housekeeping() {
 const digest = () => { try { notifications.runDigests(db); } catch (err) { console.error('Digest failed', err.message); } };
 setTimeout(digest, 60 * 1000).unref();
 setInterval(digest, 30 * 60 * 1000).unref();
+// Meeting reminders: attendees hear once about an event that starts within the hour.
+const reminders = () => { try { notifications.runReminders(db); } catch (err) { console.error('Reminders failed', err.message); } };
+setTimeout(reminders, 90 * 1000).unref();
+setInterval(reminders, 5 * 60 * 1000).unref();
 housekeeping();
 setInterval(housekeeping, 60 * 60 * 1000).unref();
 

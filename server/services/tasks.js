@@ -128,6 +128,8 @@ function enterReview(db, ctx, taskId) {
   const pinned = sops.pinned(db, ctx.organizationId, row.sopId, row.versionId);
   qarecords.createPending(db, ctx, taskId, pinned ? pinned.content.checklist : []);
   logActivity(db, { ...logCtx(ctx), action: 'qa.submit', objectType: 'task', objectId: taskId, after: { status: 'review' } });
+  const t = db.prepare('SELECT title FROM tasks WHERE organization_id = ? AND id = ?').get(ctx.organizationId, taskId);
+  notifications.notify(db, ctx, { userIds: notifications.peopleWith(db, ctx.organizationId, 'qa.review'), type: 'qa_requested', title: `Waiting for QA: ${t.title}`, link: '#/qa', objectType: 'task', objectId: taskId, dedupeKey: `qa_requested:${taskId}` });
 }
 
 function createTask(db, ctx, input = {}) {

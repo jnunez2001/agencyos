@@ -28,6 +28,12 @@ function notify(db, ctx, { userIds, type, title, body = '', link = null, objectT
   return made;
 }
 
+// The active people of an agency whose role may do `action` (for example everyone who may review QA).
+function peopleWith(db, organizationId, action) {
+  return db.prepare('SELECT u.id, m.role FROM organization_members m JOIN users u ON u.id = m.user_id WHERE m.organization_id = ? AND u.is_active = 1').all(organizationId)
+    .filter((r) => perms.can(r.role, action)).map((r) => r.id);
+}
+
 const SELECT = 'SELECT id, type, title, body, link, object_type AS objectType, object_id AS objectId, read_at AS readAt, created_at AS createdAt FROM notifications WHERE organization_id = ? AND user_id = ?';
 
 function listNotifications(db, ctx, { unread, limit = 50 } = {}) {
@@ -79,9 +85,25 @@ function runDigests(db, now = new Date()) {
   return sent;
 }
 
+// Everyone who attends a scheduled event that starts within the next 60 minutes hears about it once. Run from the
+// server's timer. All-day events have no start time and are left out.
+function runReminders(db, now = new Date()) {
+  const stamp = (d) => `${d.toISOString().slice(0, 19)}Z`;
+  const from = stamp(now); const to = stamp(new Date(now.getTime() + 60 * 60000));
+  let sent = 0;
+  const rows = db.prepare("SELECT id, organization_id AS organizationId, title, starts_at AS startsAt FROM events WHERE status = 'scheduled' AND all_day = 0 AND starts_at >= ? AND starts_at <= ?").all(from, to);
+  for (const e of rows) {
+    const system = { organizationId: e.organizationId, actor: { id: 0, role: 'owner' } };
+    const people = db.prepare('SELECT user_id AS id FROM event_attendees WHERE event_id = ?').all(e.id).map((r) => r.id);
+    const minutes = Math.max(0, Math.round((Date.parse(e.startsAt) - now.getTime()) / 60000));
+    sent += notify(db, system, { userIds: people, type: 'event_soon', title: `Starting soon: ${e.title}`, body: minutes <= 1 ? 'Starts now' : `Starts in ${minutes} minutes`, link: '#/calendar', objectType: 'event', objectId: e.id, dedupeKey: `event_soon:${e.id}`, once: true });
+  }
+  return sent;
+}
+
 function prune(db, now = new Date()) {
   const cutoff = new Date(now.getTime() - KEEP_DAYS * 86400000).toISOString();
   return db.prepare('DELETE FROM notifications WHERE read_at IS NOT NULL AND created_at < ?').run(cutoff).changes;
 }
 
-module.exports = { notify, listNotifications, unreadCount, markRead, markAllRead, runDigests, prune };
+module.exports = { notify, listNotifications, unreadCount, markRead, markAllRead, runDigests, runReminders, peopleWith, prune };
