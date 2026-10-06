@@ -130,3 +130,29 @@ test('records over HTTP and AI: notes become records, requests convert to tasks,
   assert.ok(cal.deadlines.some((d) => d.kind === 'follow_up' && d.title === 'Call the client'));
   await app.close();
 });
+
+test('meeting brief: an AI gets the transcript and what the client already has open, then drafts for review', async () => {
+  const app = await setUp();
+  const o = app.owner;
+  const c = (await o.call('POST', '/clients', { name: 'Acme' })).data;
+  await o.call('POST', '/requests', { clientId: c.id, title: 'Existing request' });
+  await o.call('POST', '/follow-ups', { clientId: c.id, title: 'Existing follow-up' });
+  const n = (await o.call('POST', '/meeting-notes', { title: 'Call', meetingDate: '2026-10-12', clientId: c.id, transcript: 'Dr. Lee: please add online booking.' })).data;
+  const key = (await o.call('POST', '/api-keys', { name: 'brief', access: 'propose' })).data;
+  const ai = mcp(app, key.token);
+  const brief = (await ai.tool('get_meeting_brief', { noteId: n.id })).data;
+  assert.equal(brief.note.transcript, 'Dr. Lee: please add online booking.');
+  assert.deepEqual(brief.openRequests.map((r) => r.title), ['Existing request']);
+  assert.deepEqual(brief.openFollowUps.map((r) => r.title), ['Existing follow-up']);
+  assert.match(brief.howToUse, /cannot/);
+  const proposal = await ai.tool('apply_changes', { summary: 'Process the call', steps: [
+    { action: 'update_meeting_note', args: { id: n.id, summary: 'Client wants online booking', requests: '- Add online booking' } },
+    { action: 'create_records_from_note', args: { noteId: n.id, kinds: ['requests'] } } ] });
+  assert.equal(proposal.data.status, 'pending');
+  assert.equal((await o.call('GET', `/meeting-notes/${n.id}`)).data.summary, '', 'nothing changes until a person approves');
+  assert.equal((await o.call('POST', `/ai/proposals/${proposal.data.proposalId}/approve`, {})).status, 200);
+  const after = (await o.call('GET', `/meeting-notes/${n.id}`)).data;
+  assert.deepEqual([after.summary, after.aiDrafted, after.status], ['Client wants online booking', true, 'draft']);
+  assert.equal((await o.call('GET', '/requests')).data.length, 2);
+  await app.close();
+});

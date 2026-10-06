@@ -29,6 +29,9 @@ test('the Owner can list, open, edit, finalize and delete meeting notes', async 
   await app.go('#/meetings/1');
   let text = app.main().textContent;
   for (const w of ['Kickoff call', 'Draft', 'Talked about the website', 'Use WordPress', 'Send the logo', 'Mark sends a quote', 'New website']) assert.match(text, new RegExp(w));
+  assert.match(text, /AI draft, please review/);
+  assert.match(text, /Dr. Lee: please add online booking/);
+  assert.ok(buttonWith(app.main(), 'Copy AI prompt'));
   clean('note page');
 
   buttonWith(app.main(), 'Mark final').click();

@@ -108,3 +108,16 @@ test('changes are logged; long sections only by name', async () => {
   assert.deepEqual(rows.map((a) => a.action), ['meeting_note.create', 'meeting_note.update', 'meeting_note.finalize']);
   assert.deepEqual(rows[1].after, { title: 'Kickoff', discussion: '(changed)' });
 });
+
+test('a transcript is kept, left out of lists, and AI-written notes are marked until a person reviews them', async () => {
+  const f = await setup();
+  const ai = { ...f.mark, source: 'ai' };
+  const n = notes.createNote(f.db, ai, { title: 'Call', meetingDate: '2026-10-12', clientId: f.client.id, transcript: 'Dr. Lee: we need booking.', summary: 'Booking wanted' });
+  assert.deepEqual([n.transcript, n.aiDrafted], ['Dr. Lee: we need booking.', true]);
+  assert.equal(notes.listNotes(f.db, f.mark)[0].transcript, undefined);
+  assert.equal(notes.updateNote(f.db, f.mark, n.id, { status: 'draft' }).aiDrafted, true, 'no change, still marked');
+  assert.equal(notes.updateNote(f.db, f.mark, n.id, { summary: 'Edited by a person' }).aiDrafted, false);
+  assert.equal(notes.updateNote(f.db, ai, n.id, { decisions: '- Use WordPress' }).aiDrafted, true);
+  assert.equal(notes.updateNote(f.db, f.mark, n.id, { status: 'final' }).aiDrafted, false, 'finalizing is the review');
+  assert.throws(() => notes.updateNote(f.db, f.mark, n.id, { transcript: 'x'.repeat(100001) }), /Transcript must be/);
+});

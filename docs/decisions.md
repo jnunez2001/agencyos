@@ -123,3 +123,8 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 - "Create records" on a note turns each line of its Decisions, Requests and Follow-ups into a record linked to the note, skips lines already made, and needs a client on the note for requests.
 - Convert to Task is a manager action; the request keeps the task link and shows its status. AI can add and edit records and run Create records through plans, but can never approve, reject, start or convert a request, and never deletes.
 - Follow-ups with a due date show on the calendar. Decisions and Follow-ups are tabs of the Meetings screen; Requests has its own menu item.
+
+## 2026-10-06: Notifications and AI meeting intelligence (roadmap steps 12 and 13)
+
+- Notifications are only about what a person must act on and never about their own action. A repeat folds into the unread one, the daily digest goes once a day, read ones are removed after 90 days. Spec: `docs/specs/2026-10-06-phase-15-notifications.md`.
+- Meeting intelligence uses the AI the person already connected: a transcript field, a brief tool (`get_meeting_brief`), a Copy AI prompt button, and an AI draft mark until a person reviews. No model runs inside AgencyOS, so it costs nothing. Spec: `docs/specs/2026-10-06-phase-16-meeting-intelligence.md`.

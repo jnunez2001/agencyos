@@ -8,6 +8,7 @@ const notes = require('./meetingnotes');
 const requests = require('./requests');
 const decisions = require('./decisions');
 const followups = require('./followups');
+const events = require('./events');
 const perms = require('./permissions');
 
 const KINDS = ['decisions', 'requests', 'followUps'];
@@ -55,4 +56,20 @@ function recordsOfNote(db, ctx, noteId) {
   return { decisions: count('decisions'), requests: count('client_requests'), followUps: count('follow_ups') };
 }
 
-module.exports = { KINDS, extractRecords, recordsOfNote, lines };
+// Everything an AI needs to turn a meeting into structure: the note with its transcript, the event, and what the client
+// already has open, so it does not invent duplicates. Read only.
+function briefForNote(db, ctx, noteId) {
+  const note = notes.getNote(db, ctx, noteId);
+  const can = (action) => perms.can(ctx.actor.role, action);
+  const byClient = note.clientId ? { clientId: note.clientId } : null;
+  const event = note.eventId ? events.getEvent(db, ctx, note.eventId) : null;
+  return {
+    note, event,
+    openRequests: byClient && can('requests.view') ? requests.listRequests(db, ctx, { ...byClient, open: '1' }).slice(0, 20).map((r) => ({ id: r.id, title: r.title, status: r.status })) : [],
+    openFollowUps: byClient && can('followups.view') ? followups.listFollowUps(db, ctx, { ...byClient, status: 'open' }).slice(0, 20).map((f) => ({ id: f.id, title: f.title, dueDate: f.dueDate, assignee: f.assigneeName })) : [],
+    recentDecisions: byClient && can('decisions.view') ? decisions.listDecisions(db, ctx, { ...byClient, status: 'active' }).slice(0, 10).map((d) => ({ id: d.id, title: d.title, decidedOn: d.decidedOn })) : [],
+    howToUse: 'Read the transcript. Fill summary, agenda, discussion, and put one decision, client request or follow-up per line in decisions, requests and followUps (a line may start with a dash). Do not repeat anything already listed as open or decided. Use update_meeting_note, then create_records_from_note. A person reviews and finalizes; you cannot.',
+  };
+}
+
+module.exports = { KINDS, extractRecords, recordsOfNote, briefForNote, lines };

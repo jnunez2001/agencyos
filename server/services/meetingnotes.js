@@ -10,7 +10,7 @@ const events = require('./events');
 const perms = require('./permissions');
 
 const STATUSES = ['draft', 'final'];
-const SECTIONS = { summary: ['Summary', 5000], agenda: ['Agenda', 10000], discussion: ['Discussion', 20000], decisions: ['Decisions', 10000], requests: ['Requests', 10000], followUps: ['Follow-ups', 10000] };
+const SECTIONS = { transcript: ['Transcript', 100000], summary: ['Summary', 5000], agenda: ['Agenda', 10000], discussion: ['Discussion', 20000], decisions: ['Decisions', 10000], requests: ['Requests', 10000], followUps: ['Follow-ups', 10000] };
 const FIELDS = ['title', 'meetingDate', 'status', 'eventId', 'clientId', 'projectId', ...Object.keys(SECTIONS)];
 
 const logCtx = (ctx) => ({ organizationId: ctx.organizationId, actorUserId: ctx.actor.id, source: ctx.source || 'web', ip: ctx.ip || null });
@@ -19,7 +19,7 @@ const manages = (ctx) => perms.can(ctx.actor.role, 'notes.manage');
 const sees = (ctx) => perms.can(ctx.actor.role, 'clients.view');
 
 const SELECT = `
-  SELECT n.id, n.title, n.meeting_date AS meetingDate, n.summary, n.agenda, n.discussion, n.decisions, n.requests, n.follow_ups AS followUps,
+  SELECT n.id, n.title, n.meeting_date AS meetingDate, n.summary, n.agenda, n.discussion, n.decisions, n.requests, n.follow_ups AS followUps, n.transcript, n.ai_drafted AS aiDrafted,
          n.status, n.event_id AS eventId, n.client_id AS clientId, c.name AS clientName, n.project_id AS projectId, p.name AS projectName,
          n.created_by AS createdBy, cu.display_name AS createdByName, n.finalized_by AS finalizedBy, fu.display_name AS finalizedByName,
          n.finalized_at AS finalizedAt, n.created_at AS createdAt, n.updated_at AS updatedAt
@@ -45,7 +45,7 @@ function mayWrite(db, ctx, row) {
 function shape(db, ctx, row) {
   const { clientName, projectName, ...rest } = row;
   const write = mayWrite(db, ctx, row);
-  return { ...rest, clientName: sees(ctx) ? clientName : null, projectName: sees(ctx) ? projectName : null, canEdit: write, canFinalize: manages(ctx), canDelete: manages(ctx) };
+  return { ...rest, aiDrafted: !!row.aiDrafted, clientName: sees(ctx) ? clientName : null, projectName: sees(ctx) ? projectName : null, canEdit: write, canFinalize: manages(ctx), canDelete: manages(ctx) };
 }
 
 function find(db, ctx, id) {
@@ -71,7 +71,7 @@ function listNotes(db, ctx, { clientId, projectId, status, q, from, to } = {}) {
   const rows = db.prepare(`${SELECT} ${where.map((w) => `AND ${w}`).join(' ')}${visibility(ctx)} ORDER BY n.meeting_date DESC, n.id DESC LIMIT 200`).all(...params, ...visibilityParams(ctx));
   return rows.map((r) => {
     // The list leaves the long sections out; open a note for them.
-    const { agenda, discussion, decisions, requests, followUps, ...short } = shape(db, ctx, r);
+    const { agenda, discussion, decisions, requests, followUps, transcript, ...short } = shape(db, ctx, r);
     return short;
   });
 }
@@ -122,8 +122,8 @@ function createNote(db, ctx, input = {}) {
       next.status = cleanEnum(input.status, STATUSES, 'status');
     }
     checkLinks(db, ctx, next);
-    const id = Number(db.prepare('INSERT INTO meeting_notes (organization_id, title, meeting_date, summary, agenda, discussion, decisions, requests, follow_ups, status, event_id, client_id, project_id, created_by, finalized_by, finalized_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(ctx.organizationId, next.title, next.meetingDate, next.summary || '', next.agenda || '', next.discussion || '', next.decisions || '', next.requests || '', next.followUps || '', next.status, next.eventId, next.clientId, next.projectId, ctx.actor.id, next.status === 'final' ? ctx.actor.id : null, next.status === 'final' ? new Date().toISOString() : null).lastInsertRowid);
+    const id = Number(db.prepare('INSERT INTO meeting_notes (organization_id, title, meeting_date, summary, agenda, discussion, decisions, requests, follow_ups, status, event_id, client_id, project_id, created_by, finalized_by, finalized_at, transcript, ai_drafted) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(ctx.organizationId, next.title, next.meetingDate, next.summary || '', next.agenda || '', next.discussion || '', next.decisions || '', next.requests || '', next.followUps || '', next.status, next.eventId, next.clientId, next.projectId, ctx.actor.id, next.status === 'final' ? ctx.actor.id : null, next.status === 'final' ? new Date().toISOString() : null, next.transcript || '', ctx.source === 'ai' ? 1 : 0).lastInsertRowid);
     if (next.eventId) db.prepare('UPDATE events SET meeting_note_id = ? WHERE organization_id = ? AND id = ?').run(id, ctx.organizationId, next.eventId);
     logActivity(db, { ...logCtx(ctx), action: 'meeting_note.create', objectType: 'meeting_note', objectId: id, after: { title: next.title, meetingDate: next.meetingDate, eventId: next.eventId, status: next.status } });
     return getNote(db, ctx, id);
@@ -151,9 +151,9 @@ function updateNote(db, ctx, id, patch = {}) {
     if (!d.changed) return shape(db, ctx, current);
     const finalizing = next.status === 'final' && current.status !== 'final';
     db.prepare(`UPDATE meeting_notes SET title = ?, meeting_date = ?, summary = ?, agenda = ?, discussion = ?, decisions = ?, requests = ?, follow_ups = ?, status = ?, client_id = ?, project_id = ?,
-                  finalized_by = ?, finalized_at = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE organization_id = ? AND id = ?`)
+                  finalized_by = ?, finalized_at = ?, transcript = ?, ai_drafted = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE organization_id = ? AND id = ?`)
       .run(next.title, next.meetingDate, next.summary, next.agenda, next.discussion, next.decisions, next.requests, next.followUps, next.status, next.clientId, next.projectId,
-        next.status === 'final' ? (finalizing ? ctx.actor.id : current.finalizedBy) : null, next.status === 'final' ? (finalizing ? new Date().toISOString() : current.finalizedAt) : null, ctx.organizationId, current.id);
+        next.status === 'final' ? (finalizing ? ctx.actor.id : current.finalizedBy) : null, next.status === 'final' ? (finalizing ? new Date().toISOString() : current.finalizedAt) : null, next.transcript, ctx.source === 'ai' ? 1 : (finalizing || Object.keys(d.after).some((k) => k in SECTIONS) ? 0 : (current.aiDrafted ? 1 : 0)), ctx.organizationId, current.id);
     // Long sections are logged by name only, so the log stays small.
     const before = {}; const after = {};
     for (const k of Object.keys(d.after)) { if (k in SECTIONS && k !== 'summary') { before[k] = '(changed)'; after[k] = '(changed)'; } else { before[k] = d.before[k]; after[k] = d.after[k]; } }

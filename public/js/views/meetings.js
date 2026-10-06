@@ -23,10 +23,12 @@ export async function openNoteForm(session, { note, event } = {}, onSaved) {
     const date = field('Date', { name: 'meetingDate', type: 'date', required: true, value: base.meetingDate || dayOfEvent || new Date().toISOString().slice(0, 10) });
     const client = !event && !note?.eventId && clients.length ? selectField('Client', [['', 'No client'], ...clients.map((c) => [c.id, c.name])], base.clientId || '', { name: 'clientId' }) : null;
     const sections = SECTION_LABEL.map(([key, label]) => textareaField(label, { name: key, maxlength: 20000, rows: key === 'discussion' ? 6 : 3 }, base[key] || ''));
+    const transcript = textareaField('Transcript or rough notes (for your AI to read)', { name: 'transcript', maxlength: 100000, rows: 5 }, base.transcript || '');
     const status = note && manage ? selectField('Status', Object.entries(STATUS_LABEL), note.status, { name: 'status' }) : null;
-    return sheetForm([title, date, client, ...sections, status], note ? 'Save' : 'Add notes', async () => {
+    return sheetForm([title, date, client, ...sections, transcript, status], note ? 'Save' : 'Add notes', async () => {
       const body = { title: title.input.value, meetingDate: date.input.value };
       for (const [i, [key]] of SECTION_LABEL.entries()) body[key] = sections[i].input.value;
+      body.transcript = transcript.input.value;
       if (client) body.clientId = client.input.value === '' ? null : Number(client.input.value);
       if (status) body.status = status.input.value;
       if (event) body.eventId = event.id;
@@ -34,6 +36,12 @@ export async function openNoteForm(session, { note, event } = {}, onSaved) {
       await onSaved(saved);
     }, close);
   });
+}
+
+// A ready prompt for the person's connected AI. The AI reads the brief and drafts; a person approves and finalizes.
+async function copyPrompt(n) {
+  const text = `Process meeting note #${n.id} ("${n.title}") in AgencyOS. Call get_meeting_brief with noteId ${n.id}, read the transcript, then use update_meeting_note to fill the summary, discussion, decisions, requests and follow-ups (one per line), and create_records_from_note to turn them into records. Do not repeat anything already open. I will review and finalize.`;
+  try { await navigator.clipboard.writeText(text); alert('Copied. Paste it into your connected AI.'); } catch { alert(text); }
 }
 
 async function notePage(session, id, rerender) {
@@ -59,14 +67,16 @@ async function notePage(session, id, rerender) {
     }) }, 'Create records')));
   return h('div', { class: 'page' },
     h('a', { class: 'back', href: '#/meetings' }, icon('back'), 'Meetings'),
-    h('div', { class: 'page-head' }, h('div', {}, h('h1', { class: 'page-title' }, n.title), h('div', { class: 'head-meta' }, statusPill(n.status))),
+    h('div', { class: 'page-head' }, h('div', {}, h('h1', { class: 'page-title' }, n.title), h('div', { class: 'head-meta' }, statusPill(n.status), n.aiDrafted && pill('ns', 'ai', 'AI draft, please review'))),
       h('div', { class: 'head-actions' },
+        n.canEdit && n.transcript && h('button', { class: 'btn', type: 'button', onclick: () => copyPrompt(n) }, 'Copy AI prompt'),
         n.canEdit && h('button', { class: 'btn', type: 'button', onclick: () => openNoteForm(session, { note: n }, rerender).catch((e) => alert(e.message)) }, 'Edit'),
         n.canFinalize && n.status === 'draft' && h('button', { class: 'btn btn-primary', type: 'button', onclick: act(() => api('PATCH', `/meeting-notes/${n.id}`, { status: 'final' })) }, 'Mark final'),
         n.canFinalize && n.status === 'final' && h('button', { class: 'btn', type: 'button', onclick: act(() => api('PATCH', `/meeting-notes/${n.id}`, { status: 'draft' })) }, 'Reopen'),
         n.canDelete && confirmButton('Delete', 'Confirm delete', async () => { try { await api('DELETE', `/meeting-notes/${n.id}`); goAfterSheets('#/meetings'); } catch (e) { alert(e.message); } }))),
     h('section', { class: 'panel' }, facts),
     sections.length ? sections : h('p', { class: 'muted pad' }, 'Nothing written yet.'),
+    n.transcript && h('details', { class: 'panel' }, h('summary', {}, 'Transcript'), h('p', { class: 'prose' }, n.transcript)),
     recordsPanel);
 }
 
