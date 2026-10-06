@@ -8,7 +8,7 @@ const { JSDOM } = require('jsdom');
 const PUBLIC = path.resolve(__dirname, '..', '..', 'public');
 
 const ROLES = ['owner', 'admin', 'manager', 'employee', 'contractor'];
-const WORK = { 'results.view': 1, 'results.record': 1, 'reports.view': 1, 'reports.manage': 1, 'reports.approve': 1, 'services.view': 1, 'sops.view': 1, 'sops.manage': 1, 'qa.review': 1, 'clients.view': 1, 'clients.manage': 1, 'projects.view': 1, 'projects.manage': 1, 'tasks.view': 1, 'tasks.manage': 1, 'tasks.work': 1, 'dashboard.agency': 1 };
+const WORK = { 'integrations.manage': 1, 'results.view': 1, 'results.record': 1, 'reports.view': 1, 'reports.manage': 1, 'reports.approve': 1, 'services.view': 1, 'sops.view': 1, 'sops.manage': 1, 'qa.review': 1, 'clients.view': 1, 'clients.manage': 1, 'projects.view': 1, 'projects.manage': 1, 'tasks.view': 1, 'tasks.manage': 1, 'tasks.work': 1, 'dashboard.agency': 1 };
 const CAN = {
   owner: { 'services.manage': 1, 'org.view': 1, 'org.update': 1, 'members.list': 1, 'members.create': 1, 'members.manage': 1, 'profile.edit_others': 1, 'profile.edit_self': 1, 'activity.view': 1, 'dashboard.team': 1, 'ai.use': 1, 'ai.manage': 1, 'ai.approve': 1, ...WORK },
   manager: { 'ai.use': 1, 'org.view': 1, 'members.list': 1, 'profile.edit_self': 1, 'dashboard.team': 1, ...WORK },
@@ -26,12 +26,13 @@ const PEOPLE = [
 const NOW = new Date().toISOString();
 const GOAL = { id: 1, clientId: 1, title: 'Increase qualified organic leads', why: 'Quiet off season', target: '50 leads a month', dueDate: '2027-03-31', serviceId: 1, serviceName: 'SEO', status: 'active', createdAt: NOW, updatedAt: NOW, progress: { tasksTotal: 4, tasksDone: 1, projects: 1 } };
 const METRICS = [
-  { metric: 'Organic leads', unit: 'leads', count: 3, latest: { id: 3, value: 55, recordedOn: '2026-09-30' }, previous: { value: 40, recordedOn: '2026-08-31' }, change: 15, changePct: 37.5, history: [{ id: 1, recordedOn: '2026-07-31', value: 30 }, { id: 2, recordedOn: '2026-08-31', value: 40 }, { id: 3, recordedOn: '2026-09-30', value: 55 }] },
-  { metric: 'Top keywords', unit: '', count: 1, latest: { id: 4, value: 12, recordedOn: '2026-09-15' }, previous: null, change: null, changePct: null, history: [{ id: 4, recordedOn: '2026-09-15', value: 12 }] },
+  { source: 'manual', metric: 'Organic leads', unit: 'leads', count: 3, latest: { id: 3, value: 55, recordedOn: '2026-09-30' }, previous: { value: 40, recordedOn: '2026-08-31' }, change: 15, changePct: 37.5, history: [{ id: 1, recordedOn: '2026-07-31', value: 30 }, { id: 2, recordedOn: '2026-08-31', value: 40 }, { id: 3, recordedOn: '2026-09-30', value: 55 }] },
+  { source: 'manual', metric: 'Top keywords', unit: '', count: 1, latest: { id: 4, value: 12, recordedOn: '2026-09-15' }, previous: null, change: null, changePct: null, history: [{ id: 4, recordedOn: '2026-09-15', value: 12 }] },
+  { source: 'gsc', metric: 'Search clicks', unit: '', count: 12, latest: { id: 20, value: 90, recordedOn: '2026-09-30' }, previous: { value: 80, recordedOn: '2026-08-31' }, change: 10, changePct: 12.5, history: [{ id: 19, recordedOn: '2026-08-31', value: 80 }, { id: 20, recordedOn: '2026-09-30', value: 90 }] },
 ];
 const RESULT_ROWS = [
-  { id: 3, clientId: 1, metric: 'Organic leads', value: 55, unit: 'leads', recordedOn: '2026-09-30', goalId: 1, goalTitle: 'Increase qualified organic leads', note: 'From Search Console', recordedById: 3, recordedByName: 'Mark Cruz' },
-  { id: 2, clientId: 1, metric: 'Organic leads', value: 40, unit: 'leads', recordedOn: '2026-08-31', goalId: null, goalTitle: null, note: '', recordedById: 2, recordedByName: 'Rayne' },
+  { source: 'manual', id: 3, clientId: 1, metric: 'Organic leads', value: 55, unit: 'leads', recordedOn: '2026-09-30', goalId: 1, goalTitle: 'Increase qualified organic leads', note: 'From Search Console', recordedById: 3, recordedByName: 'Mark Cruz' },
+  { source: 'manual', id: 2, clientId: 1, metric: 'Organic leads', value: 40, unit: 'leads', recordedOn: '2026-08-31', goalId: null, goalTitle: null, note: '', recordedById: 2, recordedByName: 'Rayne' },
 ];
 const SECTION_TEXT = { executiveSummary: 'A strong month for organic leads.', workCompleted: 'Local SEO\n- Claim profile (Sarah, Sep 10)', keyResults: '- Organic leads: 55 leads (up 15 from 40)', importantChanges: '', problemsRisks: 'Nothing is overdue.', nextPriorities: 'Due soon\n- Write service pages (due Oct 8, Mark)', recommendations: 'Keep publishing service pages.' };
 const REPORT_LIST = [
@@ -57,7 +58,8 @@ function answers(role, { mustChange = false, empty = false } = {}) {
   const me = { id: role === 'owner' ? 1 : 3, username: role === 'owner' ? 'josh' : 'mark', displayName: role === 'owner' ? 'Josh Nunez' : 'Mark Cruz', mustChangePassword: mustChange };
   const assignable = role === 'owner' ? ROLES : role === 'admin' ? ['manager', 'employee', 'contractor'] : [];
   const profile = { userId: me.id, username: me.username, displayName: me.displayName, role, jobTitle: 'Delivery Manager', department: 'Operations', timezone: 'Asia/Manila', workDays: [1, 2, 3, 4, 5], workStart: '09:00', workEnd: '17:00', weeklyCapacityHours: 40 };
-  return (method, url) => {
+  const google = { link: null };
+  return (method, url, body) => {
     const [pathname] = url.split('?');
     if (pathname === '/status') return { needsSetup: false, setupCodeRequired: false };
     if (pathname === '/session') return { user: me, organization: { id: 1, name: 'Whalls Agency', timezone: 'Asia/Manila' }, role, csrf: 'csrf-token', can, assignableRoles: assignable };
@@ -89,7 +91,13 @@ function answers(role, { mustChange = false, empty = false } = {}) {
       { id: 1, summary: 'Old plan', status: 'failed', error: 'Step 1 (create_client): A client with that name already exists', keyName: null, ownerName: 'Josh Nunez', createdAt: '2026-10-01T08:00:00.000Z', decidedAt: NOW, decidedByName: 'Josh Nunez', steps: 1, lines: ['Create client "Acme Dental"'] },
     ];
     if (pathname === '/clients/1/metrics' && method === 'GET') return can['results.view'] ? METRICS : { __status: 403, error: 'Not allowed' };
-    if (pathname === '/clients/1/results' && method === 'GET') return RESULT_ROWS;
+    if (pathname === '/clients/1/results' && method === 'GET') return url.includes('Search%20clicks') ? [{ source: 'gsc', id: 20, clientId: 1, metric: 'Search clicks', value: 90, unit: '', recordedOn: '2026-09-30', goalId: null, goalTitle: null, note: 'Google Search Console, Sep 2026', recordedById: null, recordedByName: null }] : RESULT_ROWS;
+    if (pathname === '/integrations/google' && method === 'GET') return { configured: true, email: can['integrations.manage'] ? 'agencyos@project.iam.gserviceaccount.com' : null };
+    if (pathname === '/integrations/google/available' && method === 'GET') return { sites: [{ siteUrl: 'sc-domain:acme.example', permissionLevel: 'siteRestrictedUser' }], properties: [{ id: '111', name: 'Acme site', account: 'Acme' }] };
+    if (pathname === '/clients/1/google' && method === 'GET') return google.link;
+    if (pathname === '/clients/1/google' && method === 'PUT') { google.link = { gscSiteUrl: body.gscSiteUrl, ga4PropertyId: body.ga4PropertyId, connectedAt: NOW, connectedByName: 'Josh Nunez', lastSyncAt: NOW, lastSyncStatus: 'partial', lastSyncError: 'Google Analytics: Google refused access. Add agencyos@project.iam.gserviceaccount.com as a read-only user (a viewer) for this property' }; return { link: google.link, sync: { status: 'partial', months: 12, recorded: 48, errors: [] } }; }
+    if (pathname === '/clients/1/google/sync' && method === 'POST') return { status: 'ok', months: 12, recorded: 96, errors: [] };
+    if (pathname === '/clients/1/google' && method === 'DELETE') { google.link = null; return { ok: true }; }
     if (pathname === '/clients/1/reports/generate' && method === 'POST') return { ...REPORT_LIST[0], id: 3, sections: SECTION_TEXT };
     if (pathname === '/reports' && method === 'GET') return can['reports.view'] ? REPORT_LIST : { __status: 403, error: 'Not allowed' };
     if (pathname === '/reports' && method === 'POST') return { ...REPORT_LIST[0], id: 4, sections: SECTION_TEXT };
@@ -131,7 +139,7 @@ async function openApp(role, options = {}) {
     const method = init.method || 'GET';
     const apiPath = String(url).replace(/^\/api/, '');
     calls.push({ method, path: apiPath, csrf: init.headers && init.headers['x-csrf-token'], body: init.body ? JSON.parse(init.body) : undefined });
-    const body = (options.respond && options.respond(method, apiPath)) || answer(method, apiPath);
+    const body = (options.respond && options.respond(method, apiPath)) || answer(method, apiPath, init.body ? JSON.parse(init.body) : undefined);
     if (body && body.__status) return { ok: false, status: body.__status, json: async () => ({ error: body.error, code: body.code }) };
     return { ok: true, status: 200, json: async () => body };
   };

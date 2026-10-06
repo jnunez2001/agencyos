@@ -45,6 +45,7 @@ test('an Employee reads SOPs, follows them on their task, submits for QA, and ca
   assert.equal(buttonWith(app.main(), 'Generate from data'), undefined);
   assert.equal(buttonWith(app.main(), 'New report'), undefined);
   assert.match(app.main().textContent, /August report/);
+  assert.doesNotMatch(app.main().textContent, /Google data/); // nothing is connected and staff cannot connect
   assert.equal(strayText(document.body), null);
   app.main().querySelector('.metric').click();
   await app.wait(250);

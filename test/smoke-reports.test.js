@@ -18,7 +18,7 @@ test('the Owner can use results and reports without an error or stray text', asy
   await app.go('#/clients/1');
   let text = app.main().textContent;
   for (const part of ['Results', 'Organic leads', '55 leads', 'Up 15 (37.5%) since Aug 31', 'Top keywords', 'First reading', 'Reports', 'August report']) assert.ok(text.includes(part), part);
-  assert.equal(app.main().querySelectorAll('.metric').length, 2);
+  assert.equal(app.main().querySelectorAll('.metric').length, 3);
   assert.ok(app.main().querySelector('.metric svg.spark polyline'));
   assert.ok(app.main().querySelector('.metric-change.up'));
   clean('client page');

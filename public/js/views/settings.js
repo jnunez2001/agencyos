@@ -25,6 +25,23 @@ async function servicesPanel(rerender) {
         h('div', { class: 'grow' }, h('div', { class: 'row-title' }, x.name, x.isActive ? null : h('span', { class: 'pill off' }, 'Not in use'))), icon('chevron')))));
 }
 
+async function googleSettings() {
+  const status = await api('GET', '/integrations/google');
+  const copy = status.email ? h('button', { class: 'btn', type: 'button' }, 'Copy address') : null;
+  if (copy) copy.addEventListener('click', async () => { try { await navigator.clipboard.writeText(status.email); copy.textContent = 'Copied'; } catch { copy.textContent = 'Select and copy it by hand'; } });
+  return h('section', { class: 'panel' },
+    h('div', { class: 'panel-head' }, h('h2', {}, 'Google'), status.configured ? pill('gs', 'active', 'Set up') : pill('gs', 'dropped', 'Not set up')),
+    status.configured
+      ? h('div', { class: 'stack' }, h('p', {}, 'Share each client\'s Search Console and Analytics with this address as a read-only user, then connect the client on its page.'), h('div', { class: 'url-row' }, h('code', { class: 'code url' }, status.email || ''), copy))
+      : h('div', { class: 'stack' },
+        h('p', {}, 'Install a Google service account key on the server to fill results from Search Console and Analytics automatically.'),
+        h('ol', { class: 'steps' },
+          h('li', {}, 'In Google Cloud, make a project and turn on the Search Console API, Analytics Data API and Analytics Admin API.'),
+          h('li', {}, 'Create a service account and download its JSON key.'),
+          h('li', {}, 'Copy the key to the server and run: bash /root/agencyos/deploy/set-google-key.sh /root/key.json')),
+        h('p', { class: 'muted' }, 'The key is stored only on the server and is never shown here.')));
+}
+
 export async function settingsView(session, { refresh, rerender }) {
   const org = await api('GET', '/org');
   const editable = session.can['org.update'];
@@ -34,6 +51,7 @@ export async function settingsView(session, { refresh, rerender }) {
   const notice = h('div', { class: 'notice', role: 'status' });
   const save = h('button', { class: 'btn btn-primary', type: 'submit' }, 'Save');
   const services = session.can['services.manage'] ? await servicesPanel(rerender) : null;
+  const google = session.can['services.manage'] ? await googleSettings() : null;
   return h('div', { class: 'page narrow' },
     h('div', { class: 'page-head' }, h('h1', { class: 'page-title' }, 'Settings')),
     h('form', { class: 'panel', onsubmit: async (e) => {
@@ -42,5 +60,5 @@ export async function settingsView(session, { refresh, rerender }) {
       save.disabled = true;
       try { await api('PATCH', '/org', { name: name.input.value, timezone: tz.input.value }); await refresh(); notice.textContent = 'Saved'; } catch (err) { error.textContent = err.message; }
       save.disabled = false;
-    } }, h('div', { class: 'panel-head' }, h('h2', {}, 'Agency')), name.el, tz.el, error, notice, editable && save), services);
+    } }, h('div', { class: 'panel-head' }, h('h2', {}, 'Agency')), name.el, tz.el, error, notice, editable && save), services, google);
 }

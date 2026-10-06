@@ -2,7 +2,7 @@
 // Clients: the list, a client page with goals, contacts and projects, and the forms.
 import { h, icon, openSheet, goAfterSheets } from '../dom.js';
 import { api } from '../api.js';
-import { field, selectField, textareaField, sheetForm, confirmButton, pill, formatDay, formatNumber, sparkline, CLIENT_STATUS_LABEL, GOAL_STATUS_LABEL } from '../ui.js';
+import { field, selectField, textareaField, sheetForm, confirmButton, pill, formatDay, formatWhen, formatNumber, sparkline, CLIENT_STATUS_LABEL, GOAL_STATUS_LABEL } from '../ui.js';
 import { projectPill, openProjectForm } from './projects.js';
 import { reportPill, openReportForm, openGenerate } from './reports.js';
 
@@ -98,9 +98,9 @@ async function openMetric(session, clientId, summary, goals, metrics, onChanged)
   const entries = await api('GET', `/clients/${clientId}/results?metric=${encodeURIComponent(summary.metric)}`);
   openSheet(summary.metric, (close) => h('div', { class: 'sheet-body' },
     h('div', { class: 'list-inner' }, entries.map((r) => {
-      const mayEdit = session.can['reports.manage'] || r.recordedById === session.user.id;
+      const mayEdit = r.source === 'manual' && (session.can['reports.manage'] || r.recordedById === session.user.id);
       return h(mayEdit ? 'button' : 'div', { class: `row${mayEdit ? '' : ' static'}`, type: mayEdit ? 'button' : null, onclick: mayEdit ? () => { close(); openResultForm(session, clientId, goals, { result: r }, metrics, onChanged); } : null },
-        h('div', { class: 'grow' }, h('div', { class: 'row-title' }, `${formatNumber(r.value)}${r.unit ? ` ${r.unit}` : ''}`), h('div', { class: 'row-sub' }, [formatDay(r.recordedOn), r.recordedByName, r.goalTitle ? `Goal: ${r.goalTitle}` : null, r.note].filter(Boolean).join(' · '))),
+        h('div', { class: 'grow' }, h('div', { class: 'row-title' }, `${formatNumber(r.value)}${r.unit ? ` ${r.unit}` : ''}`), h('div', { class: 'row-sub' }, [formatDay(r.recordedOn), r.source === 'manual' ? r.recordedByName : null, r.goalTitle ? `Goal: ${r.goalTitle}` : null, r.note].filter(Boolean).join(' · '))),
         mayEdit && icon('chevron'));
     })),
     h('div', { class: 'sheet-actions' },
@@ -111,10 +111,57 @@ async function openMetric(session, clientId, summary, goals, metrics, onChanged)
 function metricCard(session, clientId, m, goals, metrics, rerender) {
   const change = m.change === null ? 'First reading' : `${m.change > 0 ? 'Up' : m.change < 0 ? 'Down' : 'No change'}${m.change !== 0 ? ` ${formatNumber(Math.abs(m.change))}${m.changePct === null ? '' : ` (${formatNumber(Math.abs(m.changePct))}%)`}` : ''} since ${formatDay(m.previous.recordedOn)}`;
   return h('button', { class: 'metric', type: 'button', onclick: () => openMetric(session, clientId, m, goals, metrics, rerender).catch((e) => alert(e.message)) },
-    h('span', { class: 'label' }, m.metric),
+    h('span', { class: 'label' }, m.metric, m.source !== 'manual' ? h('span', { class: 'pill svc' }, 'Google') : null),
     h('span', { class: 'metric-value' }, `${formatNumber(m.latest.value)}${m.unit ? ` ${m.unit}` : ''}`),
     h('span', { class: `muted metric-change${m.change > 0 ? ' up' : m.change < 0 ? ' down' : ''}` }, change),
     sparkline(m.history.map((x) => x.value)));
+}
+
+// ---- Google data ----
+
+async function openGoogleConnect(session, client, onChanged) {
+  const status = await api('GET', '/integrations/google');
+  const avail = status.configured ? await api('GET', '/integrations/google/available') : { sites: [], properties: [] };
+  openSheet('Connect Google', (close) => {
+    const site = selectField('Search Console site', [['', 'None'], ...avail.sites.map((x) => [x.siteUrl, x.siteUrl])], '', { name: 'gscSiteUrl' });
+    const property = selectField('Analytics property', [['', 'None'], ...avail.properties.map((x) => [x.id, `${x.name} (${x.id}), ${x.account}`])], '', { name: 'ga4PropertyId' });
+    const notes = [];
+    if (avail.problems) notes.push(...avail.problems.map((t) => h('p', { class: 'error' }, t)));
+    notes.push(h('p', { class: 'muted' }, status.email ? `Only sites and properties shared with ${status.email} appear here. Add that address as a read-only user for the client first.` : 'Google is not set up on this server.'));
+    return sheetForm([site, property], 'Connect and fetch the numbers', async () => {
+      await api('PUT', `/clients/${client.id}/google`, { gscSiteUrl: site.input.value || null, ga4PropertyId: property.input.value || null });
+      await onChanged();
+    }, close, h('div', {}, notes));
+  });
+}
+
+function googlePanel(session, client, status, link, rerender) {
+  const manage = session.can['integrations.manage'];
+  if (!link && !manage) return null;
+  const message = h('p', { class: 'muted' });
+  const run = (fn) => async () => { message.textContent = 'Working...'; try { await fn(); } catch (err) { message.textContent = err.message; message.className = 'error'; } };
+  const actions = [];
+  if (manage && link) {
+    actions.push(h('button', { class: 'btn-text', type: 'button', onclick: run(async () => { const r = await api('POST', `/clients/${client.id}/google/sync`, {}); message.textContent = `Fetched ${r.recorded} numbers over ${r.months} months`; await rerender(); }) }, 'Sync now'));
+    actions.push(h('button', { class: 'btn-text', type: 'button', onclick: () => openGoogleConnect(session, client, rerender).catch((e) => alert(e.message)) }, 'Change'));
+    actions.push(confirmButton('Disconnect', 'Click again to disconnect', async () => { await api('DELETE', `/clients/${client.id}/google`); await rerender(); }));
+  } else if (manage && status.configured) {
+    actions.push(h('button', { class: 'btn-text', type: 'button', onclick: () => openGoogleConnect(session, client, rerender).catch((e) => alert(e.message)) }, 'Connect Google'));
+  }
+  let body;
+  if (link) {
+    body = h('div', { class: 'stack' },
+      h('dl', { class: 'facts' },
+        link.gscSiteUrl ? [h('dt', {}, 'Search Console'), h('dd', {}, link.gscSiteUrl)] : null,
+        link.ga4PropertyId ? [h('dt', {}, 'Analytics'), h('dd', {}, `Property ${link.ga4PropertyId}`)] : null,
+        h('dt', {}, 'Last synced'), h('dd', {}, link.lastSyncAt ? `${formatWhen(link.lastSyncAt)}${link.lastSyncStatus && link.lastSyncStatus !== 'ok' ? `, ${link.lastSyncStatus === 'partial' ? 'with a problem' : 'failed'}` : ''}` : 'Not yet')),
+      link.lastSyncError ? h('p', { class: 'error' }, link.lastSyncError) : null, message);
+  } else if (!status.configured) {
+    body = h('p', { class: 'muted' }, 'Google is not set up on this server. An Owner or Admin installs the key under Settings.');
+  } else {
+    body = h('p', { class: 'muted' }, 'Not connected. Connect Search Console and Analytics to fill results automatically.');
+  }
+  return h('section', { class: 'panel' }, h('div', { class: 'panel-head' }, h('h2', {}, 'Google data'), h('div', { class: 'foot-actions' }, actions)), body, link ? null : message);
 }
 
 // A goal with its progress: how much of the work that supports it is done.
@@ -132,10 +179,12 @@ function goalCard(session, clientId, g, rerender) {
 }
 
 async function clientPage(session, id, rerender) {
-  const [c, metrics, reports] = await Promise.all([
+  const [c, metrics, reports, googleStatus, googleLink] = await Promise.all([
     api('GET', `/clients/${id}`),
     session.can['results.view'] ? api('GET', `/clients/${id}/metrics`) : [],
     session.can['reports.view'] ? api('GET', `/reports?clientId=${id}`) : [],
+    session.can['results.view'] ? api('GET', '/integrations/google') : { configured: false },
+    session.can['results.view'] ? api('GET', `/clients/${id}/google`) : null,
   ]);
   const manage = session.can['clients.manage'];
   const facts = h('dl', { class: 'facts' },
@@ -161,6 +210,7 @@ async function clientPage(session, id, rerender) {
         session.can['results.view'] && h('section', { class: 'panel' },
           h('div', { class: 'panel-head' }, h('h2', {}, 'Results'), session.can['results.record'] && h('button', { class: 'btn-text', type: 'button', onclick: () => openResultForm(session, c.id, c.goals, {}, metrics, rerender) }, 'Record result')),
           metrics.length ? h('div', { class: 'metrics' }, metrics.map((m) => metricCard(session, c.id, m, c.goals, metrics, rerender))) : h('p', { class: 'muted' }, 'No results recorded yet.')),
+        session.can['results.view'] && googlePanel(session, c, googleStatus, googleLink, rerender),
         session.can['reports.view'] && h('section', { class: 'panel' },
           h('div', { class: 'panel-head' }, h('h2', {}, 'Reports'), session.can['reports.manage'] && h('div', { class: 'foot-actions' },
             h('button', { class: 'btn-text', type: 'button', onclick: () => openGenerate(c.id, c.name, (r) => goAfterSheets(`#/reports/${r.id}`)) }, 'Generate from data'),

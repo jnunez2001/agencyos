@@ -63,7 +63,7 @@ function listResults(db, ctx, clientId, { metric, from, to } = {}) {
 function metricsSummary(db, ctx, clientId) {
   need(ctx, 'results.view');
   const cid = findClient(db, ctx.organizationId, clientId);
-  const rows = db.prepare('SELECT id, metric, value, unit, recorded_on AS recordedOn FROM client_results WHERE organization_id = ? AND client_id = ? ORDER BY recorded_on, id').all(ctx.organizationId, cid);
+  const rows = db.prepare('SELECT id, metric, value, unit, recorded_on AS recordedOn, source FROM client_results WHERE organization_id = ? AND client_id = ? ORDER BY recorded_on, id').all(ctx.organizationId, cid);
   const byMetric = new Map();
   for (const r of rows) {
     const key = r.metric.toLowerCase();
@@ -77,6 +77,7 @@ function metricsSummary(db, ctx, clientId) {
     const changePct = previous && previous.value !== 0 ? Math.round(((latest.value - previous.value) / Math.abs(previous.value)) * 1000) / 10 : null;
     return {
       metric: latest.metric, unit: latest.unit, count: list.length,
+      source: latest.source,
       latest: { id: latest.id, value: latest.value, recordedOn: latest.recordedOn },
       previous: previous ? { value: previous.value, recordedOn: previous.recordedOn } : null,
       change, changePct,
