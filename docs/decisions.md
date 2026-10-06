@@ -92,3 +92,9 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 - Nobody loses their last way in: password sign-in can be turned off only while Google is linked, and Google can be unlinked only while password sign-in is on. An Owner or Admin resetting the password turns password sign-in back on.
 - Uses the same Google OAuth client as the data connection, with one more return address (`/api/auth/google/callback`). Basic identity access only (openid, email, profile), so no unverified-app warning.
 - The sign-in state is single use, short lived and held in a cookie as well, with PKCE and a nonce; the ID token's issuer, audience, expiry, nonce and verified email are checked.
+
+## 2026-10-06: Google is the standard way in
+
+- When the server can sign in with Google, the login page leads with **Sign in with Google**, and the username and password form sits under "Use a username and password". New members are added by Google email, with no password unless one is asked for.
+- Passwords are not removed. Each person with a linked Google account can turn their password off. Keep one strong password, kept in a password manager, for the Owner as a way back in if Google is unavailable.
+- Google sign-in is only as strong as the Google account, so every account that signs in should use 2-Step Verification, ideally a passkey or security key.

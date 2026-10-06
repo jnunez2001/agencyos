@@ -29,7 +29,8 @@ test('the Owner can open every screen and sheet without an error or stray text',
   await app.wait();
   let sheet = document.querySelector('.sheet');
   assert.ok(sheet && /Add a team member/.test(sheet.textContent));
-  assert.equal(sheet.querySelector('input[name=password]').value.length, 14);
+  assert.equal(sheet.querySelector('input[name=password]').value, ''); // Google is the standard, so no password is made
+  assert.ok(sheet.querySelector('input[name=googleEmail]'));
   assert.deepEqual([...sheet.querySelectorAll('select[name=role] option')].map((o) => o.value), ['owner', 'admin', 'manager', 'employee', 'contractor']);
   assert.equal(strayText(sheet), null);
   sheet.querySelector('button[aria-label=Close]').click();

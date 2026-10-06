@@ -15,7 +15,11 @@ test('the login page offers Google and explains a failed Google sign-in once', a
   assert.match(document.body.textContent, /invite you with this email/);
   const google = [...document.querySelectorAll('a.btn')].find((a) => /Sign in with Google/.test(a.textContent));
   assert.equal(google.getAttribute('href'), '/api/auth/google/start');
-  assert.ok(document.querySelector('input[name=username]') && document.querySelector('input[name=password]'));
+  assert.ok(google.classList.contains('btn-primary')); // Google is the standard way in
+  // the password form is one click away, inside a details section
+  const details = document.querySelector('details.advanced');
+  assert.match(details.querySelector('summary').textContent, /username and password/);
+  assert.ok(details.querySelector('input[name=username]') && details.querySelector('input[name=password]'));
   assert.equal(app.window.location.hash, ''); // tidied, so a reload does not show it again
   assert.equal(strayText(document.body), null);
   assert.deepEqual(app.errors, []);

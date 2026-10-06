@@ -51,14 +51,16 @@ export const SIGN_IN_PROBLEMS = {
 export function loginView(onDone, { googleSignIn = false, notice = '' } = {}) {
   const user = field('Username', { name: 'username', required: true, autocapitalize: 'none', autocomplete: 'username' });
   const pass = field('Password', { name: 'password', type: 'password', required: true, autocomplete: 'current-password' });
+  const passwordForm = form([user, pass], 'Sign in', async () => {
+    await api('POST', '/login', { username: user.input.value, password: pass.input.value });
+    await onDone();
+  });
+  // Google is the standard way in. The password form is still there, one click away.
+  if (!googleSignIn) return card('Sign in', notice ? h('div', { class: 'error', role: 'alert' }, notice) : null, passwordForm);
   return card('Sign in',
     notice ? h('div', { class: 'error', role: 'alert' }, notice) : null,
-    form([user, pass], 'Sign in', async () => {
-      await api('POST', '/login', { username: user.input.value, password: pass.input.value });
-      await onDone();
-    }),
-    googleSignIn ? h('div', { class: 'or' }, h('span', {}, 'or')) : null,
-    googleSignIn ? h('a', { class: 'btn btn-block', href: '/api/auth/google/start' }, 'Sign in with Google') : null);
+    h('a', { class: 'btn btn-primary btn-block', href: '/api/auth/google/start' }, 'Sign in with Google'),
+    h('details', { class: 'advanced' }, h('summary', {}, 'Use a username and password'), h('div', {}, passwordForm)));
 }
 
 // Shown right after a first sign-in with a temporary password. Nothing else works until it is changed.
