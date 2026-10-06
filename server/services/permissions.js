@@ -29,6 +29,12 @@ const ACTIONS = {
   // Change the status of a task assigned to you, and comment on a task you can see.
   'tasks.work': ALL,
   'dashboard.agency': NOT_CONTRACTOR,
+  // Results are recorded by staff. Reports are written and approved by managers; staff read them.
+  'results.view': NOT_CONTRACTOR,
+  'results.record': NOT_CONTRACTOR,
+  'reports.view': NOT_CONTRACTOR,
+  'reports.manage': MANAGERS,
+  'reports.approve': MANAGERS,
   // The agency's list of services. Everyone but a Contractor reads it; Owner and Admin change it.
   'services.view': NOT_CONTRACTOR,
   'services.manage': OWNER_ADMIN,
