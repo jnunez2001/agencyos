@@ -24,8 +24,9 @@ function createApp(db) {
   app.use('/api', apiRouter(db));
   app.use('/api', mw.errorHandler);
 
-  // "no-cache" means "check with the server before reusing" (cheap, thanks to ETags), so updates show up at once.
-  app.use(express.static(path.join(config.root, 'public'), { etag: true, setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache') }));
+  // "no-store": a proxy such as Cloudflare rewrites "no-cache" into hours of browser caching, which hides updates.
+  // The pages are small, so downloading them each time costs little.
+  app.use(express.static(path.join(config.root, 'public'), { etag: true, setHeaders: (res) => res.setHeader('Cache-Control', 'no-store') }));
   app.get('*', (req, res) => res.sendFile(path.join(config.root, 'public', 'index.html')));
   return app;
 }
