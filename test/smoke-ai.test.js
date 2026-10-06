@@ -40,6 +40,8 @@ test('the Owner can use the AI inbox and keys without an error or stray text', a
   assert.match(text, /Claude on my Mac/);
   assert.match(text, /Ask me first/);
   assert.match(text, /Revoked/);
+  assert.match(text, /Connected app/);
+  assert.match(text, /Signed in with OAuth/);
   assert.ok(!text.includes('aos_Ab12SECRET'));
   clean('keys');
 
@@ -62,7 +64,7 @@ test('the Owner can use the AI inbox and keys without an error or stray text', a
   await app.wait(100);
 
   // an existing key: change access, revoke needs two clicks, a revoked key is read only
-  document.querySelectorAll('.row')[0].click();
+  document.querySelectorAll('.row')[1].click();
   await app.wait(100);
   sheet = document.querySelector('.sheet');
   const revoke = buttonWith(sheet, 'Revoke key');
@@ -73,11 +75,31 @@ test('the Owner can use the AI inbox and keys without an error or stray text', a
   await app.wait(200);
   assert.ok(app.calls.some((c) => c.method === 'PATCH' && c.path === '/api-keys/1' && c.body.access === 'read'));
   await app.wait(100);
-  document.querySelectorAll('.row')[1].click();
+  document.querySelectorAll('.row')[2].click();
   await app.wait(100);
   assert.match(document.querySelector('.sheet').textContent, /This key is revoked/);
   document.querySelector('.sheet button[aria-label=Close]').click();
   await app.wait(100);
+
+  // the page an AI app sends the person to
+  await app.go('#/connect/abc123');
+  text = app.main().textContent;
+  assert.match(text, /Connect Claude/);
+  assert.match(text, /claude\.ai/);
+  assert.match(text, /Josh Nunez \(Owner\)/);
+  assert.match(text, /Nothing happens until you approve/);
+  clean('connect page');
+  const select = app.main().querySelector('select[name=access]');
+  select.value = 'read';
+  select.dispatchEvent(new app.window.Event('change'));
+  assert.match(app.main().textContent, /cannot change it/);
+  buttonWith(app.main(), 'Approve').click();
+  await app.wait(150);
+  const approve = app.calls.find((c) => c.method === 'POST' && c.path === '/oauth/requests/abc123/approve');
+  assert.deepEqual([approve.body.access, approve.csrf], ['read', 'csrf-token']);
+  await app.go('#/connect/gone');
+  assert.match(app.main().textContent, /has expired/);
+  clean('expired request');
 
   assert.deepEqual(app.errors, []);
 });

@@ -4,6 +4,7 @@ const config = require('./config');
 const { openDb } = require('./db');
 const { createApp } = require('./app');
 const auth = require('./services/auth');
+const oauth = require('./services/oauth');
 
 const db = openDb(path.join(config.dataDir, 'agencyos.db'));
 const app = createApp(db);
@@ -11,6 +12,7 @@ const app = createApp(db);
 function housekeeping() {
   auth.pruneSessions(db);
   auth.pruneAttempts(db);
+  oauth.prune(db);
 }
 housekeeping();
 setInterval(housekeeping, 60 * 60 * 1000).unref();

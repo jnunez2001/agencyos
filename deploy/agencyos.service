@@ -14,6 +14,8 @@ Environment=HOST=127.0.0.1
 Environment=PORT=3200
 Environment=DATA_DIR=/var/lib/agencyos
 Environment=COOKIE_SECURE=1
+# Where people reach it. The OAuth discovery documents use this address.
+Environment=PUBLIC_URL=https://agency.joshnunezseo.com
 Environment=SESSION_DAYS=14
 # The setup code (SETUP_TOKEN) lives here, readable by root only. Created by deploy/set-setup-token.sh.
 EnvironmentFile=-/etc/agencyos.env

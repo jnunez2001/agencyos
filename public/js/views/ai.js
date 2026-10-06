@@ -50,7 +50,7 @@ function openKey(key, onChanged) {
     const help = h('p', { class: 'muted' }, ACCESS_HELP[key.access]);
     access.input.addEventListener('change', () => { help.textContent = ACCESS_HELP[access.input.value]; });
     const facts = h('dl', { class: 'facts' },
-      h('dt', {}, 'Key'), h('dd', { class: 'mono' }, `${key.prefix}...`),
+      h('dt', {}, key.kind === 'oauth' ? 'Type' : 'Key'), h('dd', { class: key.kind === 'oauth' ? '' : 'mono' }, key.kind === 'oauth' ? 'Connected app' : `${key.prefix}...`),
       h('dt', {}, 'Acts as'), h('dd', {}, key.ownerName),
       h('dt', {}, 'Last used'), h('dd', {}, key.lastUsedAt ? formatWhen(key.lastUsedAt) : 'Never'));
     if (key.revoked) return h('div', { class: 'sheet-body' }, facts, h('p', { class: 'muted' }, 'This key is revoked.'), h('div', { class: 'sheet-actions' }, h('button', { class: 'btn', type: 'button', onclick: () => close() }, 'Close')));
@@ -65,8 +65,8 @@ function keysTab(keys, rerender) {
     keys.length === 0
       ? h('section', { class: 'panel' }, h('p', { class: 'muted' }, 'No keys yet.'))
       : h('section', { class: 'panel list' }, keys.map((k) => h('button', { class: 'row', type: 'button', onclick: () => openKey(k, rerender) },
-        h('div', { class: 'grow' }, h('div', { class: 'row-title' }, k.name, k.revoked && h('span', { class: 'pill off' }, 'Revoked')),
-          h('div', { class: 'row-sub' }, `${k.prefix}... · acts as ${k.ownerName} · ${k.lastUsedAt ? `used ${formatWhen(k.lastUsedAt)}` : 'never used'}`)),
+        h('div', { class: 'grow' }, h('div', { class: 'row-title' }, k.name, k.kind === 'oauth' && h('span', { class: 'pill ai' }, 'Connected app'), k.revoked && h('span', { class: 'pill off' }, 'Revoked')),
+          h('div', { class: 'row-sub' }, `${k.kind === 'oauth' ? 'Signed in with OAuth' : `${k.prefix}...`} · acts as ${k.ownerName} · ${k.lastUsedAt ? `used ${formatWhen(k.lastUsedAt)}` : 'never used'}`)),
         h('span', { class: `pill acc-${k.access}` }, ACCESS_LABEL[k.access]), icon('chevron')))));
 }
 

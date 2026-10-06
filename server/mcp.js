@@ -9,6 +9,7 @@ const tasks = require('./services/tasks');
 const members = require('./services/members');
 const dashboard = require('./services/dashboard');
 const { ServiceError } = require('./services/errors');
+const { originOf } = require('./oauthRoutes');
 
 const VERSIONS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 const RATE = { windowMs: 60 * 1000, max: 120 };
@@ -94,7 +95,8 @@ function mcpHandler(db) {
     if (req.method !== 'POST') return res.status(405).set('Allow', 'POST').json({ error: 'Use POST' });
     const header = req.get('authorization') || '';
     const auth = apikeys.authenticate(db, header.startsWith('Bearer ') ? header.slice(7).trim() : '');
-    if (!auth) return res.status(401).set('WWW-Authenticate', 'Bearer').json({ error: 'A valid API key is required' });
+    // The pointer tells an OAuth client (such as claude.ai) where to find the sign-in.
+    if (!auth) return res.status(401).set('WWW-Authenticate', `Bearer resource_metadata="${originOf(req)}/.well-known/oauth-protected-resource"`).json({ error: 'A valid API key or access token is required' });
     const now = Date.now();
     const h = hits.get(auth.keyId);
     if (!h || now - h.start >= RATE.windowMs) hits.set(auth.keyId, { start: now, count: 1 });

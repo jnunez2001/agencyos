@@ -10,6 +10,7 @@ import { profileView } from './views/profile.js';
 import { settingsView } from './views/settings.js';
 import { activityView } from './views/activity.js';
 import { aiView } from './views/ai.js';
+import { connectView } from './views/connect.js';
 import { tasksView } from './views/tasks.js';
 import { projectsView } from './views/projects.js';
 import { clientsView } from './views/clients.js';
@@ -18,7 +19,7 @@ import { visibleNav, bottomNav } from './nav.js';
 const root = document.getElementById('app');
 let session = null;
 
-const VIEWS = { dashboard: dashboardView, tasks: tasksView, projects: projectsView, clients: clientsView, ai: aiView, team: teamView, activity: activityView, settings: settingsView, profile: profileView };
+const VIEWS = { dashboard: dashboardView, tasks: tasksView, projects: projectsView, clients: clientsView, ai: aiView, connect: connectView, team: teamView, activity: activityView, settings: settingsView, profile: profileView };
 
 function currentTheme() { return document.documentElement.getAttribute('data-theme') || 'light'; }
 function toggleTheme() {
@@ -44,7 +45,7 @@ async function signOut() {
 // '#/projects/12' is the projects screen with the parameter '12'.
 function route() {
   const [key, param] = location.hash.replace(/^#\/?/, '').split('/');
-  const allowed = [...visibleNav(session).map((n) => n.key), 'profile'];
+  const allowed = [...visibleNav(session).map((n) => n.key), 'profile', 'connect'];
   if (allowed.includes(key || 'dashboard')) return { key: key || 'dashboard', param: param || '' };
   // A screen this person may not use: show the dashboard and fix the address so Back does not loop.
   history.replaceState(null, '', '#/dashboard');

@@ -13,11 +13,11 @@ const logCtx = (ctx) => ({ organizationId: ctx.organizationId, actorUserId: ctx.
 const need = (ctx) => { if (!perms.can(ctx.actor.role, 'ai.manage')) throw new ServiceError(403, 'Not allowed'); };
 
 const SELECT = `
-  SELECT k.id, k.name, k.access, k.prefix, k.user_id AS userId, u.display_name AS ownerName,
+  SELECT k.id, k.name, k.access, k.prefix, k.kind, k.user_id AS userId, u.display_name AS ownerName,
          k.created_at AS createdAt, k.last_used_at AS lastUsedAt, k.revoked_at AS revokedAt
     FROM api_keys k JOIN users u ON u.id = k.user_id
    WHERE k.organization_id = ?`;
-const shape = (r) => ({ id: r.id, name: r.name, access: r.access, prefix: r.prefix, userId: r.userId, ownerName: r.ownerName, createdAt: r.createdAt, lastUsedAt: r.lastUsedAt, revoked: !!r.revokedAt });
+const shape = (r) => ({ id: r.id, name: r.name, access: r.access, prefix: r.prefix, kind: r.kind, userId: r.userId, ownerName: r.ownerName, createdAt: r.createdAt, lastUsedAt: r.lastUsedAt, revoked: !!r.revokedAt });
 
 function find(db, organizationId, id) {
   const row = db.prepare(`${SELECT} AND k.id = ?`).get(organizationId, Number(id));
@@ -70,22 +70,32 @@ function revokeKey(db, ctx, id) {
   return { ok: true };
 }
 
-// The person and agency behind a token, or null. Revoked keys and deactivated people do not authenticate.
-// The role is read live, so demoting someone limits their keys at once.
-function authenticate(db, token) {
-  if (typeof token !== 'string' || !/^aos_[A-Za-z0-9_-]{20,64}$/.test(token)) return null;
-  const row = db.prepare(
-    `SELECT k.id, k.access, k.organization_id AS organizationId, k.last_used_at AS lastUsedAt, u.id AS userId, m.role
-       FROM api_keys k
-       JOIN users u ON u.id = k.user_id AND u.is_active = 1
-       JOIN organization_members m ON m.user_id = u.id AND m.organization_id = k.organization_id
-      WHERE k.token_hash = ? AND k.revoked_at IS NULL`
-  ).get(sha256(token));
-  if (!row) return null;
+const touch = (db, row) => {
   if (!row.lastUsedAt || Date.now() - Date.parse(row.lastUsedAt) > 60 * 1000) {
     db.prepare("UPDATE api_keys SET last_used_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").run(row.id);
   }
+};
+const KEY_COLUMNS = `k.id, k.access, k.organization_id AS organizationId, k.last_used_at AS lastUsedAt, u.id AS userId, m.role`;
+const KEY_JOINS = `JOIN users u ON u.id = k.user_id AND u.is_active = 1
+       JOIN organization_members m ON m.user_id = u.id AND m.organization_id = k.organization_id`;
+
+// The person and agency behind a token, or null. Revoked keys and deactivated people do not authenticate.
+// The role is read live, so demoting someone limits their keys at once. Two kinds of token work here: a key
+// (aos_) made on the AI page, and an access token (aot_) from the OAuth sign-in used by claude.ai.
+function authenticate(db, token) {
+  if (typeof token !== 'string') return null;
+  let row = null;
+  if (/^aos_[A-Za-z0-9_-]{20,64}$/.test(token)) {
+    row = db.prepare(`SELECT ${KEY_COLUMNS} FROM api_keys k ${KEY_JOINS} WHERE k.token_hash = ? AND k.revoked_at IS NULL`).get(sha256(token));
+  } else if (/^aot_[A-Za-z0-9_-]{20,64}$/.test(token)) {
+    row = db.prepare(
+      `SELECT ${KEY_COLUMNS} FROM oauth_tokens t JOIN api_keys k ON k.id = t.key_id ${KEY_JOINS}
+        WHERE t.access_hash = ? AND t.access_expires_at > ? AND k.revoked_at IS NULL`
+    ).get(sha256(token), new Date().toISOString());
+  }
+  if (!row) return null;
+  touch(db, row);
   return { keyId: row.id, access: row.access, organizationId: row.organizationId, actor: { id: row.userId, role: row.role } };
 }
 
-module.exports = { ACCESS, listKeys, createKey, updateKey, revokeKey, authenticate };
+module.exports = { ACCESS, listKeys, createKey, updateKey, revokeKey, authenticate, sha256 };
