@@ -14,7 +14,7 @@ test('the team list shows everyone in the agency and nobody from another agency'
   const josh = list.find((m) => m.username === 'josh');
   assert.deepEqual([josh.role, josh.isActive, josh.displayName], ['owner', true, 'Josh']);
   assert.ok(!JSON.stringify(list).includes('zed'));
-  assert.ok(!JSON.stringify(list).includes('password'));
+  assert.ok(!JSON.stringify(list).includes('hash') && !JSON.stringify(list).includes('password_hash'));
 });
 
 test('each member says whether the viewer may manage them', async () => {

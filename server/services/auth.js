@@ -96,7 +96,8 @@ async function login(db, { username, password, ip, userAgent }) {
     return { ok: false, status: 429, error: 'Too many attempts. Try again later' };
   }
   const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
-  const valid = user ? await verifyPassword(password, user.password_hash) : await verifyAgainstDummy(password);
+  // A person who signs in only with Google has password sign-in turned off: it fails the same way as a wrong password.
+  const valid = user && user.password_login ? await verifyPassword(password, user.password_hash) : await verifyAgainstDummy(password);
   const member = user && db.prepare('SELECT organization_id FROM organization_members WHERE user_id = ?').get(user.id);
   if (!user || !valid || !user.is_active || !member) {
     recordFailure(db, username, ip);
@@ -125,4 +126,4 @@ async function changePassword(db, ctx, { current, next, keepSessionId = null }) 
   return { ok: true };
 }
 
-module.exports = { login, changePassword, createSession, resolveSession, touchSession, destroySession, destroyUserSessions, pruneSessions, pruneAttempts, isLockedOut };
+module.exports = { login, recordFailure, changePassword, createSession, resolveSession, touchSession, destroySession, destroyUserSessions, pruneSessions, pruneAttempts, isLockedOut };

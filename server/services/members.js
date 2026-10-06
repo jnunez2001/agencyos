@@ -8,20 +8,28 @@ const { ServiceError } = require('./errors');
 const { cleanText, cleanUsername } = require('./validate');
 const perms = require('./permissions');
 const { destroyUserSessions } = require('./auth');
+const store = require('./identityStore');
+const crypto = require('crypto');
 
 const SELECT = `
   SELECT u.id, u.username, u.display_name AS displayName, u.is_active AS isActive, u.must_change_password AS mustChangePassword,
+         u.password_login AS passwordLogin, i.email AS googleEmail, (i.subject IS NOT NULL) AS googleLinked,
          m.role, COALESCE(p.job_title, '') AS jobTitle, COALESCE(p.department, '') AS department
     FROM organization_members m
     JOIN users u ON u.id = m.user_id
     LEFT JOIN employee_profiles p ON p.user_id = u.id
+    LEFT JOIN user_identities i ON i.user_id = u.id
    WHERE m.organization_id = ?`;
 
 const logCtx = (ctx) => ({ organizationId: ctx.organizationId, actorUserId: ctx.actor.id, source: ctx.source || 'web', ip: ctx.ip || null });
 
 function shape(row, canSeeAll, actorRole) {
   const out = { id: row.id, username: row.username, displayName: row.displayName, role: row.role, isActive: !!row.isActive, jobTitle: row.jobTitle, department: row.department };
-  if (canSeeAll) out.mustChangePassword = !!row.mustChangePassword;
+  if (canSeeAll) {
+    out.mustChangePassword = !!row.mustChangePassword;
+    out.passwordLogin = !!row.passwordLogin;
+    out.google = { linked: !!row.googleLinked, email: row.googleEmail || null, pending: !!row.googleEmail && !row.googleLinked };
+  }
   // Whether the viewer may change this person. The screens use it to show or hide the actions.
   if (actorRole) out.canManage = perms.canManage(actorRole, row.role);
   return out;
@@ -40,13 +48,14 @@ function listMembers(db, ctx) {
 }
 
 // Used by setup and by the Owner or Admin adding a person. The caller has already checked permission.
-async function insertMember(db, { organizationId, username, displayName, role, password, mustChange, timezone }) {
+async function insertMember(db, { organizationId, username, displayName, role, password, mustChange, timezone, passwordLogin = true, googleEmail = null }) {
   const hash = await hashPassword(password);
   try {
     return db.transaction(() => {
-      const userId = Number(db.prepare('INSERT INTO users (username, display_name, password_hash, must_change_password) VALUES (?, ?, ?, ?)').run(username, displayName, hash, mustChange ? 1 : 0).lastInsertRowid);
+      const userId = Number(db.prepare('INSERT INTO users (username, display_name, password_hash, must_change_password, password_login) VALUES (?, ?, ?, ?, ?)').run(username, displayName, hash, mustChange ? 1 : 0, passwordLogin ? 1 : 0).lastInsertRowid);
       db.prepare('INSERT INTO organization_members (organization_id, user_id, role) VALUES (?, ?, ?)').run(organizationId, userId, role);
       db.prepare('INSERT INTO employee_profiles (organization_id, user_id, timezone) VALUES (?, ?, ?)').run(organizationId, userId, timezone || 'Asia/Manila');
+      if (googleEmail) store.upsertInvite(db, { organizationId, userId, email: googleEmail });
       return userId;
     })();
   } catch (err) {
@@ -61,11 +70,15 @@ async function createMember(db, ctx, input) {
   const displayName = cleanText(input.displayName, 'Name', 1, 60);
   if (!perms.ROLES.includes(input.role)) throw new ServiceError(400, 'Choose a role');
   if (!perms.assignableRoles(ctx.actor.role).includes(input.role)) throw new ServiceError(403, 'Not allowed');
-  const problem = passwordProblem(input.password);
-  if (problem) throw new ServiceError(400, problem);
+  const googleEmail = input.googleEmail === undefined || input.googleEmail === null || input.googleEmail === '' ? null : store.cleanGoogleEmail(input.googleEmail);
+  const hasPassword = typeof input.password === 'string' && input.password !== '';
+  if (!hasPassword && !googleEmail) throw new ServiceError(400, 'Give a temporary password, a Google email, or both');
+  if (hasPassword) { const problem = passwordProblem(input.password); if (problem) throw new ServiceError(400, problem); }
+  if (googleEmail && store.emailTaken(db, googleEmail)) throw new ServiceError(409, 'That Google email is already used for another member');
   const org = db.prepare('SELECT timezone FROM organizations WHERE id = ?').get(ctx.organizationId);
-  const id = await insertMember(db, { organizationId: ctx.organizationId, username, displayName, role: input.role, password: input.password, mustChange: true, timezone: org.timezone });
-  logActivity(db, { ...logCtx(ctx), action: 'member.create', objectType: 'member', objectId: id, after: { username, displayName, role: input.role } });
+  // A person invited by Google email alone has no usable password: they sign in with Google.
+  const id = await insertMember(db, { organizationId: ctx.organizationId, username, displayName, role: input.role, password: hasPassword ? input.password : crypto.randomBytes(24).toString('base64url'), mustChange: hasPassword, timezone: org.timezone, passwordLogin: hasPassword, googleEmail });
+  logActivity(db, { ...logCtx(ctx), action: 'member.create', objectType: 'member', objectId: id, after: { username, displayName, role: input.role, ...(googleEmail ? { googleEmail } : {}) } });
   return shape(findMember(db, ctx.organizationId, id), true, ctx.actor.role);
 }
 
@@ -121,7 +134,7 @@ async function resetPassword(db, ctx, id, { password }) {
   if (problem) throw new ServiceError(400, problem);
   const hash = await hashPassword(password);
   db.transaction(() => {
-    db.prepare("UPDATE users SET password_hash = ?, must_change_password = 1, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").run(hash, target.id);
+    db.prepare("UPDATE users SET password_hash = ?, must_change_password = 1, password_login = 1, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").run(hash, target.id);
     destroyUserSessions(db, target.id);
     logActivity(db, { ...logCtx(ctx), action: 'member.reset_password', objectType: 'member', objectId: target.id });
   })();

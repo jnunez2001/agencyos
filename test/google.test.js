@@ -195,3 +195,35 @@ test('removing an account tells Google to drop the token, and never fails the ca
   assert.equal(new URLSearchParams(f.calls[0].body).get('token'), 'rt-1');
   await revokeToken('rt-1', async () => { throw new Error('down'); }); // no throw
 });
+
+// ---- signing in to AgencyOS with Google ----
+
+const { identityUrl, exchangeIdentity } = require('../server/google');
+const idToken = (claims) => `h.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.s`;
+const GOOD = { iss: 'https://accounts.google.com', aud: APP.clientId, sub: '1234567890', email: 'josh@example.com', email_verified: true, name: 'Josh Nunez', nonce: 'n-1', exp: 9_999_999_999 };
+
+test('the identity address asks only for who the person is, with PKCE, a nonce and a state', () => {
+  const u = new URL(identityUrl({ clientId: APP.clientId, redirectUri: 'https://agency.example/api/auth/google/callback', state: 's1', nonce: 'n1', challenge: 'c1' }));
+  const q = u.searchParams;
+  assert.deepEqual(q.get('scope').split(' ').sort(), ['email', 'openid', 'profile']);
+  assert.deepEqual([q.get('state'), q.get('nonce'), q.get('code_challenge'), q.get('code_challenge_method'), q.get('prompt'), q.get('access_type')], ['s1', 'n1', 'c1', 'S256', 'select_account', null]);
+});
+
+test('the ID token is accepted only when it is for this app, from Google, fresh, with the right nonce and a verified email', async () => {
+  const run = (claims, extra = {}) => exchangeIdentity({ ...APP, redirectUri: 'x', code: 'c', verifier: 'v', nonce: 'n-1', fetchImpl: fake({ 'oauth2.googleapis.com/token': { body: { id_token: idToken(claims), access_token: 'a' } } }).fetchImpl, now: () => 1_700_000_000_000, ...extra });
+  assert.deepEqual(await run(GOOD), { sub: '1234567890', email: 'josh@example.com', name: 'Josh Nunez' });
+  assert.equal((await run({ ...GOOD, iss: 'accounts.google.com' })).sub, '1234567890');
+  for (const bad of [{ iss: 'https://evil.example' }, { aud: 'someone-else' }, { exp: 1_600_000_000 }, { nonce: 'other' }, { sub: '' }, { sub: undefined }]) {
+    await assert.rejects(() => run({ ...GOOD, ...bad }), /did not check out/i, JSON.stringify(bad));
+  }
+  for (const bad of [{ email_verified: false }, { email_verified: 'true' }, { email: '' }]) await assert.rejects(() => run({ ...GOOD, ...bad }), /not verified/i, JSON.stringify(bad));
+  await assert.rejects(() => exchangeIdentity({ ...APP, redirectUri: 'x', code: 'c', verifier: 'v', nonce: 'n-1', fetchImpl: fake({ 'oauth2.googleapis.com/token': { body: { access_token: 'a' } } }).fetchImpl }), /did not say who/i);
+  await assert.rejects(() => exchangeIdentity({ ...APP, redirectUri: 'x', code: 'c', verifier: 'v', nonce: 'n', fetchImpl: fake({ 'oauth2.googleapis.com/token': { status: 400, body: {} } }).fetchImpl }), /did not accept/i);
+});
+
+test('the code exchange sends the PKCE verifier', async () => {
+  const f = fake({ 'oauth2.googleapis.com/token': { body: { id_token: idToken(GOOD) } } });
+  await exchangeIdentity({ ...APP, redirectUri: 'https://agency.example/cb', code: 'the-code', verifier: 'the-verifier', nonce: 'n-1', fetchImpl: f.fetchImpl, now: () => 1_700_000_000_000 });
+  const form = new URLSearchParams(f.calls[0].body);
+  assert.deepEqual([form.get('code'), form.get('code_verifier'), form.get('redirect_uri'), form.get('grant_type')], ['the-code', 'the-verifier', 'https://agency.example/cb', 'authorization_code']);
+});

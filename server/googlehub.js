@@ -6,7 +6,7 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
-const { createOAuthGoogle, authUrl, exchangeCode, revokeToken } = require('./google');
+const { createOAuthGoogle, authUrl, exchangeCode, revokeToken, identityUrl, exchangeIdentity, GoogleError } = require('./google');
 const { ServiceError } = require('./services/errors');
 
 const STATE_TTL_MS = 10 * 60 * 1000;
@@ -28,6 +28,7 @@ function createHub({ db, serviceClient = null, oauthApp = null, keyFile, fetchIm
   let tokenKey = null;
   const states = new Map(); // state -> { userId, organizationId, returnTo, expires }
   const clients = new Map(); // account id -> { client, token }
+  const idStates = new Map(); // sign-in to AgencyOS: state -> { purpose, userId, organizationId, nonce, verifier, expires }
 
   function key() {
     if (tokenKey) return tokenKey;
@@ -92,6 +93,38 @@ function createHub({ db, serviceClient = null, oauthApp = null, keyFile, fetchIm
     return { accountId: id, email, returnTo: s.returnTo, reconnected: !!existing };
   }
 
+  // ---- signing in to AgencyOS itself (who the person is, nothing more) ----
+
+  const identityRedirect = (origin) => `${origin}/api/auth/google/callback`;
+  const random = (bytes) => crypto.randomBytes(bytes).toString('base64url');
+
+  // `purpose` is 'login' (nobody is signed in) or 'link' (a signed-in person adds their Google account).
+  function startIdentity({ origin, purpose, userId = null, organizationId = null }) {
+    if (!oauthApp) throw new ServiceError(400, 'Signing in with Google is not set up on this server');
+    for (const [k, v] of idStates) if (v.expires < now()) idStates.delete(k);
+    if (idStates.size > 500) idStates.clear();
+    const state = random(24);
+    const nonce = random(16);
+    const verifier = random(32);
+    idStates.set(state, { purpose, userId, organizationId, nonce, verifier, expires: now() + STATE_TTL_MS });
+    const challenge = crypto.createHash('sha256').update(verifier).digest('base64url');
+    return { state, url: identityUrl({ clientId: oauthApp.clientId, redirectUri: identityRedirect(origin), state, nonce, challenge }) };
+  }
+
+  async function finishIdentity({ origin, code, state }) {
+    const s = typeof state === 'string' ? idStates.get(state) : null;
+    if (s) idStates.delete(state); // single use
+    if (!s || s.expires < now()) throw new ServiceError(400, 'That sign-in link expired. Try again');
+    if (typeof code !== 'string' || !code) throw new ServiceError(400, 'Google did not send a sign-in code');
+    try {
+      const claims = await exchangeIdentity({ ...oauthApp, redirectUri: identityRedirect(origin), code, verifier: s.verifier, nonce: s.nonce, fetchImpl, now });
+      return { purpose: s.purpose, userId: s.userId, organizationId: s.organizationId, claims };
+    } catch (err) {
+      if (err instanceof GoogleError) throw new ServiceError(502, err.message);
+      throw err;
+    }
+  }
+
   function listAccounts(organizationId) {
     return db.prepare(
       `SELECT a.id, a.email, a.status, a.connected_at AS connectedAt, u.display_name AS connectedByName,
@@ -135,7 +168,7 @@ function createHub({ db, serviceClient = null, oauthApp = null, keyFile, fetchIm
     serviceEmail: serviceClient ? serviceClient.email : null,
     serviceConfigured: !!serviceClient,
     oauthConfigured: !!oauthApp,
-    startSignIn, finishSignIn, listAccounts, removeAccount, get,
+    startSignIn, finishSignIn, startIdentity, finishIdentity, listAccounts, removeAccount, get,
     _encrypt: encrypt, _decrypt: decrypt, // for tests
   };
 }

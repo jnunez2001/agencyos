@@ -176,3 +176,44 @@ test('a return target is only ever Settings or a client page', async () => {
     assert.equal(out.returnTo, 'settings', bad);
   }
 });
+
+// ---- signing in to AgencyOS ----
+
+test('sign-in to AgencyOS: a state, a nonce and a verifier per attempt, and the claims come back with who started it', async () => {
+  let nonce = '';
+  const t = await setup({
+    'oauth2.googleapis.com/token': (init) => ({ body: { id_token: `h.${Buffer.from(JSON.stringify({ iss: 'https://accounts.google.com', aud: APP.clientId, sub: 'g-1', email: 'josh@example.com', email_verified: true, name: 'Josh', nonce, exp: 9_999_999_999 })).toString('base64url')}.s`, access_token: 'a' } }),
+  });
+  const start = (purpose = 'login', who = {}) => {
+    const out = t.hub.startIdentity({ origin: ORIGIN, purpose, ...who });
+    const q = new URL(out.url).searchParams;
+    nonce = q.get('nonce');
+    return { out, q };
+  };
+  const { out, q } = start('link', { userId: 7, organizationId: 3 });
+  assert.equal(q.get('redirect_uri'), `${ORIGIN}/api/auth/google/callback`);
+  assert.deepEqual([q.get('scope'), q.get('code_challenge_method'), q.get('state') === out.state], ['openid email profile', 'S256', true]);
+  const done = await t.hub.finishIdentity({ origin: ORIGIN, code: 'c', state: out.state });
+  assert.deepEqual([done.purpose, done.userId, done.organizationId, done.claims], ['link', 7, 3, { sub: 'g-1', email: 'josh@example.com', name: 'Josh' }]);
+  // the code goes with the verifier whose challenge was sent
+  const sent = new URLSearchParams(t.f.calls.find((c) => c.url.includes('oauth2.googleapis.com/token')).body);
+  assert.equal(require('crypto').createHash('sha256').update(sent.get('code_verifier')).digest('base64url'), q.get('code_challenge'));
+  // single use, unknown, and missing code
+  await assert.rejects(() => t.hub.finishIdentity({ origin: ORIGIN, code: 'c', state: out.state }), /expired/i);
+  await assert.rejects(() => t.hub.finishIdentity({ origin: ORIGIN, code: 'c', state: 'made-up' }), /expired/i);
+  const second = start();
+  await assert.rejects(() => t.hub.finishIdentity({ origin: ORIGIN, code: '', state: second.out.state }), /sign-in code/i);
+  assert.notEqual(start().out.state, start().out.state);
+});
+
+test('a sign-in to AgencyOS that takes too long, or that Google refuses, is explained', async () => {
+  let t0 = 1_000_000_000_000;
+  const t = await setup({ 'oauth2.googleapis.com/token': { status: 400, body: {} } }, { now: () => t0 });
+  const a = t.hub.startIdentity({ origin: ORIGIN, purpose: 'login' });
+  await assert.rejects(() => t.hub.finishIdentity({ origin: ORIGIN, code: 'c', state: a.state }), (e) => e.status === 502 && /did not accept/i.test(e.message));
+  const b = t.hub.startIdentity({ origin: ORIGIN, purpose: 'login' });
+  t0 += 11 * 60 * 1000;
+  await assert.rejects(() => t.hub.finishIdentity({ origin: ORIGIN, code: 'c', state: b.state }), /expired/i);
+  const none = await setup(SIGN_IN, { oauthApp: null });
+  assert.throws(() => none.hub.startIdentity({ origin: ORIGIN, purpose: 'login' }), /not set up/i);
+});

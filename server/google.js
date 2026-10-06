@@ -168,6 +168,38 @@ async function exchangeCode({ clientId, clientSecret, redirectUri, code, fetchIm
   return { refreshToken: data.refresh_token, email };
 }
 
+// ---- signing in to AgencyOS with Google (identity only: openid, email, profile) ----
+
+const IDENTITY_SCOPES = ['openid', 'email', 'profile'];
+
+function identityUrl({ clientId, redirectUri, state, nonce, challenge }) {
+  const u = new URL(AUTH_URL);
+  u.searchParams.set('client_id', clientId);
+  u.searchParams.set('redirect_uri', redirectUri);
+  u.searchParams.set('response_type', 'code');
+  u.searchParams.set('scope', IDENTITY_SCOPES.join(' '));
+  u.searchParams.set('state', state);
+  u.searchParams.set('nonce', nonce);
+  u.searchParams.set('code_challenge', challenge);
+  u.searchParams.set('code_challenge_method', 'S256');
+  u.searchParams.set('prompt', 'select_account');
+  return u.toString();
+}
+
+// The code for the person's identity. The ID token comes straight from Google's token endpoint over TLS, so its
+// signature need not be checked again, but who it is for, who issued it, when it expires and its nonce are.
+async function exchangeIdentity({ clientId, clientSecret, redirectUri, code, verifier, nonce, fetchImpl = fetch, now = () => Date.now() }) {
+  const res = await postForm(fetchImpl, TOKEN_URL, { grant_type: 'authorization_code', code, client_id: clientId, client_secret: clientSecret, redirect_uri: redirectUri, code_verifier: verifier });
+  if (!res.ok) throw new GoogleError('Google did not accept the sign-in. Try again');
+  const data = await res.json();
+  let claims;
+  try { claims = JSON.parse(Buffer.from(String(data.id_token).split('.')[1], 'base64url').toString('utf8')); } catch { throw new GoogleError('Google did not say who signed in. Try again'); }
+  const issuerOk = claims.iss === 'https://accounts.google.com' || claims.iss === 'accounts.google.com';
+  if (!issuerOk || claims.aud !== clientId || !(Number(claims.exp) * 1000 > now()) || claims.nonce !== nonce || !claims.sub) throw new GoogleError('Google\'s answer did not check out. Try again');
+  if (claims.email_verified !== true || typeof claims.email !== 'string' || !claims.email) throw new GoogleError('Google has not verified that email address');
+  return { sub: String(claims.sub), email: claims.email, name: typeof claims.name === 'string' ? claims.name : '' };
+}
+
 // Best effort: tell Google the token is no longer wanted.
 async function revokeToken(token, fetchImpl = fetch) {
   try { await postForm(fetchImpl, 'https://oauth2.googleapis.com/revoke', { token }); } catch { /* the token is dropped here either way */ }
@@ -185,4 +217,4 @@ function loadGoogle(file, options = {}) {
   }
 }
 
-module.exports = { createGoogle, createOAuthGoogle, loadGoogle, authUrl, exchangeCode, revokeToken, GoogleError };
+module.exports = { createGoogle, createOAuthGoogle, loadGoogle, authUrl, exchangeCode, revokeToken, identityUrl, exchangeIdentity, GoogleError };
