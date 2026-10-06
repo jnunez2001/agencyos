@@ -49,7 +49,7 @@ export async function qaView(session, { rerender }) {
   return h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('h1', { class: 'page-title' }, 'QA')),
     queue.length === 0
-      ? h('section', { class: 'panel' }, h('p', { class: 'muted' }, 'Nothing is waiting for review.'))
+      ? h('section', { class: 'panel' }, h('p', { class: 'muted' }, 'Nothing is waiting for review. Tasks appear here when someone submits them for QA.'))
       : h('section', { class: 'panel list' }, queue.map((q) => h('button', { class: 'row', type: 'button', onclick: () => openReview(session, q.taskId, rerender).catch((e) => alert(e.message)) },
         q.assigneeName ? avatar({ id: 0, displayName: q.assigneeName }, 'md') : null,
         h('div', { class: 'grow' }, h('div', { class: 'row-title' }, q.title),

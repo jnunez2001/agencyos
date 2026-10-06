@@ -98,7 +98,8 @@ async function render() {
   } catch (err) {
     if (err.status === 401) return boot();
     if (err.code === 'must_change_password') return boot();
-    main.append(h('section', { class: 'panel' }, h('p', { class: 'muted' }, err.message)));
+    const again = err.network || err.status >= 500 ? h('button', { class: 'btn', type: 'button', onclick: render }, 'Try again') : null;
+    main.append(h('section', { class: 'panel' }, h('p', { class: 'muted' }, err.message), again));
   }
   if (seq !== renderSeq) return; // a newer render replaced this one
   root.replaceChildren(shell(key, main));

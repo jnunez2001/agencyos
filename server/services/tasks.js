@@ -10,6 +10,7 @@ const qarecords = require('./qarecords');
 const goals = require('./goals');
 const perms = require('./permissions');
 const notifications = require('./notifications');
+const { pageOf } = require('./paging');
 
 const STATUSES = ['todo', 'in_progress', 'review', 'changes', 'done'];
 const PRIORITIES = ['low', 'normal', 'high', 'urgent'];
@@ -73,14 +74,15 @@ function listTasks(db, ctx, q = {}) {
   if (q.status) { where.push('t.status = ?'); params.push(cleanEnum(q.status, STATUSES, 'status')); }
   if (q.overdue) { where.push("t.status != 'done' AND t.due_date IS NOT NULL AND t.due_date < ?"); params.push(todayDate); }
   if (q.q) { where.push("t.title LIKE ? ESCAPE '\\'"); params.push(`%${String(q.q).slice(0, 100).replace(/[\\%_]/g, '\\$&')}%`); }
+  const page = pageOf(q, 500);
   const rows = db.prepare(
     `${SELECT} ${where.map((w) => `AND ${w}`).join(' ')}
       ORDER BY (t.status = 'done'),
                (CASE WHEN t.status != 'done' AND t.due_date IS NOT NULL AND t.due_date < ? THEN 0 ELSE 1 END),
                CASE t.priority WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END,
                (t.due_date IS NULL), t.due_date, t.id
-      LIMIT 500`
-  ).all(...params, todayDate);
+      LIMIT ? OFFSET ?`
+  ).all(...params, todayDate, page.limit, page.offset);
   return rows.map((r) => shape(db, ctx, r, todayDate));
 }
 

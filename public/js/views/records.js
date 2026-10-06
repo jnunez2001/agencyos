@@ -2,7 +2,7 @@
 // The Decisions and Follow-ups tabs of the Meetings screen, and the tab bar they share with the notes list.
 import { h, icon, openSheet } from '../dom.js';
 import { api } from '../api.js';
-import { field, selectField, textareaField, sheetForm, confirmButton, pill, formatDay, PRIORITY_LABEL } from '../ui.js';
+import { emptyNote, field, selectField, textareaField, sheetForm, confirmButton, pill, formatDay, PRIORITY_LABEL } from '../ui.js';
 
 const DECISION_STATUS = { active: 'Active', reversed: 'Reversed' };
 const FOLLOWUP_STATUS = { open: 'Open', done: 'Done', cancelled: 'Cancelled' };
@@ -59,7 +59,7 @@ export async function decisionsPage(session, rerender, state) {
         d.sourceNoteId && h('a', { class: 'link', href: `#/meetings/${d.sourceNoteId}` }, `From ${d.sourceNoteTitle || 'meeting notes'}`)),
       pill('ds', d.status, DECISION_STATUS[d.status]),
       d.canEdit && h('button', { class: 'btn', type: 'button', onclick: () => openDecisionForm(session, { decision: d }, rerender).catch((e) => alert(e.message)) }, 'Edit'),
-      d.canEdit && confirmButton('Delete', 'Confirm', async () => { try { await api('DELETE', `/decisions/${d.id}`); await rerender(); } catch (e) { alert(e.message); } }))) : h('p', { class: 'muted pad' }, 'No decisions yet. Write them in meeting notes and choose Create records.')));
+      d.canEdit && confirmButton('Delete', 'Confirm', async () => { try { await api('DELETE', `/decisions/${d.id}`); await rerender(); } catch (e) { alert(e.message); } }))) : emptyNote(!!state.status, manage ? 'No decisions yet. Add one here, or write them in a meeting note and choose Create records.' : 'No decisions yet. They are recorded from meeting notes.', { pad: true })));
 }
 
 // ---- follow-ups ----
@@ -101,5 +101,5 @@ export async function followUpsPage(session, rerender, state) {
       f.priority && f.priority !== 'normal' && pill('pr', f.priority, PRIORITY_LABEL[f.priority]),
       f.status !== 'open' && pill('fs', f.status, FOLLOWUP_STATUS[f.status]),
       f.canEdit && h('button', { class: 'btn', type: 'button', onclick: () => openFollowUpForm(session, { followUp: f }, rerender).catch((e) => alert(e.message)) }, 'Edit'),
-      f.canDelete && confirmButton('Delete', 'Confirm', async () => { try { await api('DELETE', `/follow-ups/${f.id}`); await rerender(); } catch (e) { alert(e.message); } }))) : h('p', { class: 'muted pad' }, 'No follow-ups here.')));
+      f.canDelete && confirmButton('Delete', 'Confirm', async () => { try { await api('DELETE', `/follow-ups/${f.id}`); await rerender(); } catch (e) { alert(e.message); } }))) : emptyNote(state.show === 'mine', `${state.show === 'open' ? 'No open follow-ups.' : 'No follow-ups yet.'} ${session.can['followups.create'] ? 'Add one here, or write them in a meeting note and choose Create records.' : 'They are assigned to you from meetings.'}`, { pad: true })));
 }

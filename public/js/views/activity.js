@@ -1,7 +1,7 @@
 // Joshua Nunez
 import { h } from '../dom.js';
 import { api } from '../api.js';
-import { avatar, formatWhen, selectField } from '../ui.js';
+import { emptyNote, avatar, formatWhen, selectField } from '../ui.js';
 
 // What each action reads as in a sentence. An unknown action shows its own name.
 const SENTENCE = {
@@ -104,5 +104,5 @@ export async function activityView(session, { rerender }) {
           h('div', { class: 'row-title' }, `${r.actorName} ${SENTENCE[r.action] || r.action}`, r.source === 'ai' && h('span', { class: 'pill ai' }, 'AI')),
           changes(r).length ? h('div', { class: 'row-sub' }, changes(r).join(' · ')) : null),
         h('span', { class: 'muted nowrap' }, formatWhen(r.createdAt)))))
-      : h('section', { class: 'panel' }, h('p', { class: 'muted' }, 'Nothing here yet.')));
+      : h('section', { class: 'panel' }, emptyNote(!!(filter.actorId || filter.action), 'No activity yet. Changes made in NexusOS show up here.')));
 }

@@ -72,7 +72,7 @@ const taskRow = (id, title, status, extra = {}) => ({ id, goalId: null, goalTitl
 const GOOGLE_BY_ID = { 1: { linked: true, email: 'josh@example.com', pending: false }, 2: { linked: false, email: null, pending: false }, 3: { linked: false, email: 'mark@example.com', pending: true }, 4: { linked: true, email: 'sarah@example.com', pending: false } };
 const RANK = { owner: 5, admin: 4, manager: 3, employee: 2, contractor: 1 };
 
-function answers(role, { mustChange = false, empty = false, signedOut = false } = {}) {
+function answers(role, { mustChange = false, empty = false, signedOut = false, quiet = false } = {}) {
   const can = Object.fromEntries(Object.keys(CAN.owner).map((k) => [k, !!CAN[role][k]]));
   const me = { id: role === 'owner' ? 1 : 3, username: role === 'owner' ? 'josh' : 'mark', displayName: role === 'owner' ? 'Josh Nunez' : 'Mark Cruz', mustChangePassword: mustChange };
   const assignable = role === 'owner' ? ROLES : role === 'admin' ? ['manager', 'employee', 'contractor'] : [];
@@ -95,6 +95,21 @@ function answers(role, { mustChange = false, empty = false, signedOut = false } 
       const t = taskList.find((x) => x.id === Number(pathname.split('/')[2])) || taskList[0];
       const pinned = { id: 1, title: 'Page Optimization', status: 'approved', version: '1.0', latestVersion: '1.1', isLatest: false, content: SOP_CONTENT };
       return { ...t, sop: t.sopId ? pinned : null, qa: { required: t.qaRequired, pending: t.id === 2 ? PENDING : null, history: t.id === 2 ? [PENDING, PAST] : [] } };
+    }
+    // Traceability: where a task came from, and what happened lately for a client. A Contractor gets the SOP link and nothing else.
+    if (/^\/tasks\/\d+\/trace$/.test(pathname) && method === 'GET') {
+      const id = Number(pathname.split('/')[2]);
+      if (mineOnly) return { taskId: id, request: null, meetingNote: null, event: null, decisions: [], followUps: [], sop: id === 1 ? { id: 1, title: 'Page Optimization', version: '1.0', hash: null } : null, timeEntries: { scope: 'mine', count: 0, hours: 0, approvedHours: 0 } };
+      return id === 1
+        ? { taskId: 1, request: { id: 1, title: 'Add online booking', status: 'in_progress', hash: '#/requests/1' }, meetingNote: { id: 1, title: 'Kickoff call', date: '2026-10-12', hash: '#/meetings/1' }, event: { id: 1, title: 'Kickoff call', startsAt: '2026-10-12T14:00:00Z', hash: '#/calendar/1' }, decisions: [{ id: 1, title: 'Use WordPress', decidedOn: '2026-10-12', status: 'active', hash: '#/meetings/decisions' }], followUps: [{ id: 1, title: 'Send the quote', dueDate: null, status: 'open', hash: '#/meetings/follow-ups' }], sop: { id: 1, title: 'Page Optimization', version: '1.0', hash: '#/sops/1' }, timeEntries: { scope: 'team', count: 2, hours: 3.5, approvedHours: 2 } }
+        : { taskId: id, request: null, meetingNote: null, event: null, decisions: [], followUps: [], sop: null, timeEntries: { scope: 'team', count: 0, hours: 0, approvedHours: 0 } };
+    }
+    if (/^\/clients\/\d+\/timeline$/.test(pathname) && method === 'GET') {
+      if (!can['clients.view']) return { __status: 403, error: 'Not allowed' };
+      const days = Number(new URLSearchParams(url.split('?')[1] || '').get('days')) || 7;
+      if (quiet) return { clientId: 1, clientName: 'Acme Dental', days, total: 0, items: [], groups: [] };
+      const items = [{ type: 'note', id: 1, title: 'Kickoff call', at: NOW, hash: '#/meetings/1' }, { type: 'request', id: 1, title: 'Add online booking', at: NOW, hash: '#/requests/1' }];
+      return { clientId: 1, clientName: 'Acme Dental', days, total: 2, items, groups: [{ type: 'note', label: 'Meeting notes', items: [items[0]] }, { type: 'request', label: 'Requests', items: [items[1]] }] };
     }
     if (pathname === '/sops' && method === 'GET') { const want = new URLSearchParams(url.split('?')[1] || '').get('status'); return SOP_LIST.filter((x) => !want || x.status === want).filter((x) => can['sops.manage'] || x.status !== 'draft'); }
     if (pathname === '/sops' && method === 'POST') return { ...SOP_LIST[1], id: 3, title: 'New one' };

@@ -9,7 +9,7 @@ function parseCookies(header) {
   const out = {};
   for (const part of String(header || '').split(';')) {
     const i = part.indexOf('=');
-    if (i > 0) out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim());
+    if (i > 0) { const raw = part.slice(i + 1).trim(); let value = raw; try { value = decodeURIComponent(raw); } catch { /* a malformed cookie is just an unknown cookie */ } out[part.slice(0, i).trim()] = value; }
   }
   return out;
 }
@@ -74,6 +74,7 @@ function requirePasswordChanged(req, res, next) {
 const wrap = (fn) => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 
 function errorHandler(err, req, res, next) {
+  if (res.headersSent) return next(err);
   if (err instanceof ServiceError) return res.status(err.status).json({ error: err.message });
   if (err.type === 'entity.parse.failed' || err.type === 'entity.too.large') return res.status(400).json({ error: 'Bad request' });
   console.error(err);

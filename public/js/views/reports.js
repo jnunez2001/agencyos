@@ -2,7 +2,7 @@
 // Reports: the list, a report page (copy and print), the edit form and the generate sheet.
 import { h, icon, openSheet, goAfterSheets } from '../dom.js';
 import { api } from '../api.js';
-import { field, selectField, textareaField, sheetForm, confirmButton, pill, formatDay, formatWhen } from '../ui.js';
+import { emptyNote, field, selectField, textareaField, sheetForm, confirmButton, pill, formatDay, formatWhen } from '../ui.js';
 
 const SECTIONS = [
   ['executiveSummary', 'Executive summary'], ['workCompleted', 'Work completed'], ['keyResults', 'Key results'], ['importantChanges', 'Important changes'],
@@ -97,7 +97,7 @@ export async function reportsView(session, { param, rerender }) {
       manage && h('button', { class: 'btn btn-primary', type: 'button', onclick: () => openReportForm(null, { clients }, open) }, icon('plus'), 'New report')),
     h('div', { class: 'toolbar' }, h('div', { class: 'chips' }, chip('all', 'All'), chip('draft', 'Drafts'), chip('approved', 'Approved')), clientSel.el),
     list.length === 0
-      ? h('section', { class: 'panel' }, h('p', { class: 'muted' }, 'No reports here.'))
+      ? h('section', { class: 'panel' }, emptyNote(statusFilter !== 'all' || !!clientFilter, manage ? 'No reports yet. Generate one from a client page, or choose New report.' : 'No reports yet. A manager writes them for each client.'))
       : h('section', { class: 'panel list' }, list.map((r) => h('a', { class: 'row', href: `#/reports/${r.id}` },
         h('div', { class: 'grow' }, h('div', { class: 'row-title' }, r.title), h('div', { class: 'row-sub' }, `${r.clientName}, ${period(r)}`)), reportPill(r.status), icon('chevron')))));
 }

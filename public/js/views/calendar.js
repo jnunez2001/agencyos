@@ -263,8 +263,8 @@ export async function calendarView(session, { param, rerender }) {
   }
   const body = state.view === 'month' ? monthView(session, days, onChanged, goDay)
     : state.view === 'week' ? weekView(session, days, onChanged, goDay)
-      : state.view === 'day' ? listView(session, days, onChanged, range, 'Nothing on this day.')
-        : listView(session, days, onChanged, range, 'Nothing in the next 30 days.');
+      : state.view === 'day' ? listView(session, days, onChanged, range, 'No meetings scheduled.')
+        : listView(session, days, onChanged, range, 'No meetings scheduled.');
 
   return h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('div', {}, h('h1', { class: 'page-title' }, 'Calendar')),

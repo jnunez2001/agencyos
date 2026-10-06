@@ -37,6 +37,8 @@ function createApp(db, { google = null } = {}) {
   app.get('/terms', (req, res) => res.sendFile(path.join(config.root, 'public', 'terms.html')));
   app.get('/privacy', (req, res) => res.sendFile(path.join(config.root, 'public', 'privacy.html')));
   app.get('*', (req, res) => res.sendFile(path.join(config.root, 'public', 'index.html')));
+  // Anything that still fails gets the same plain message, never a stack trace or database text.
+  app.use(mw.errorHandler);
   return app;
 }
 

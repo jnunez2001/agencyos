@@ -3,7 +3,7 @@
 import { h, icon, openSheet, goAfterSheets } from '../dom.js';
 import { api } from '../api.js';
 import { changesPanel, changesListView, openRaiseChange } from './sopchanges.js';
-import { field, selectField, textareaField, sheetForm, pill, formatWhen, SOP_STATUS_LABEL, PRIORITY_LABEL } from '../ui.js';
+import { emptyNote, field, selectField, textareaField, sheetForm, pill, formatWhen, SOP_STATUS_LABEL, PRIORITY_LABEL } from '../ui.js';
 
 const STATUSES = Object.keys(SOP_STATUS_LABEL);
 export const sopPill = (s) => pill('sp', s, SOP_STATUS_LABEL[s] || s);
@@ -149,7 +149,7 @@ export async function sopsView(session, { param, rerender }) {
     h('div', { class: 'chips' }, statuses.map((s) => chip(s, SOP_STATUS_LABEL[s])), chip('all', 'All')),
     box.el,
     list.length === 0
-      ? h('section', { class: 'panel' }, h('p', { class: 'muted' }, 'No SOPs here.'))
+      ? h('section', { class: 'panel' }, emptyNote(!!search || !['all', 'approved'].includes(statusFilter), `${statusFilter === 'approved' ? 'No approved SOPs yet.' : 'No SOPs yet.'} ${session.can['sops.manage'] ? 'Create your first SOP to write down how work gets done.' : 'They appear here once a manager approves them.'}`))
       : h('section', { class: 'panel list' }, list.map((s) => h('a', { class: 'row', href: `#/sops/${s.id}` },
         h('div', { class: 'grow' }, h('div', { class: 'row-title' }, s.title), h('div', { class: 'row-sub' }, [s.service, s.ownerName].filter(Boolean).join(' · '))),
         s.requiresQa ? h('span', { class: 'muted nowrap' }, 'QA') : null, h('span', { class: 'muted nowrap' }, `v${s.version}`), sopPill(s.status), icon('chevron')))));

@@ -2,7 +2,7 @@
 // Projects: the list, a project page with its tasks, and the add and edit form.
 import { h, icon, openSheet } from '../dom.js';
 import { api } from '../api.js';
-import { field, selectField, textareaField, sheetForm, pill, formatDay, PROJECT_STATUS_LABEL } from '../ui.js';
+import { emptyNote, field, selectField, textareaField, sheetForm, pill, formatDay, PROJECT_STATUS_LABEL } from '../ui.js';
 import { taskRow, openTaskForm } from './tasks.js';
 
 const STATUSES = Object.keys(PROJECT_STATUS_LABEL);
@@ -61,7 +61,7 @@ async function projectPage(session, id, rerender) {
         session.can['tasks.manage'] && h('button', { class: 'btn btn-primary', type: 'button', onclick: () => openTaskForm(session, { projectId: project.id }, rerender).catch((e) => alert(e.message)) }, icon('plus'), 'New task'))),
     h('div', { class: 'split' },
       h('section', { class: 'panel' }, h('div', { class: 'panel-head' }, h('h2', {}, 'Details')), project.description && h('p', { class: 'prose' }, project.description), facts),
-      h('section', { class: 'panel list' }, tasks.length ? tasks.map((t) => taskRow(session, t, rerender, { showProject: false })) : h('p', { class: 'muted pad' }, 'No tasks yet.'))));
+      h('section', { class: 'panel list' }, tasks.length ? tasks.map((t) => taskRow(session, t, rerender, { showProject: false })) : emptyNote(false, session.can['tasks.manage'] ? 'No tasks yet. Create your first task.' : 'No tasks yet.', { pad: true }))));
 }
 
 export async function projectsView(session, { param, rerender }) {
@@ -74,7 +74,7 @@ export async function projectsView(session, { param, rerender }) {
       session.can['projects.manage'] && h('button', { class: 'btn btn-primary', type: 'button', onclick: () => openProjectForm(session, {}, rerender).catch((e) => alert(e.message)) }, icon('plus'), 'New project')),
     h('div', { class: 'chips' }, chip('open', 'Open'), chip('completed', 'Completed'), chip('archived', 'Archived'), chip('all', 'All')),
     shown.length === 0
-      ? h('section', { class: 'panel' }, h('p', { class: 'muted' }, 'No projects here.'))
+      ? h('section', { class: 'panel' }, emptyNote(list.length > 0, session.can['projects.manage'] ? 'No projects yet. Create a project from a client.' : 'No projects yet.'))
       : h('section', { class: 'panel list' }, shown.map((p) => h('a', { class: 'row', href: `#/projects/${p.id}` },
         h('div', { class: 'grow' }, h('div', { class: 'row-title' }, p.name), h('div', { class: 'row-sub' }, [p.clientName, p.managerName].filter(Boolean).join(' · '))),
         p.dueDate && h('span', { class: 'muted nowrap' }, `Due ${formatDay(p.dueDate)}`),
