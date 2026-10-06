@@ -8,6 +8,9 @@ const projects = require('./services/projects');
 const tasks = require('./services/tasks');
 const events = require('./services/events');
 const meetingnotes = require('./services/meetingnotes');
+const requests = require('./services/requests');
+const decisions = require('./services/decisions');
+const followups = require('./services/followups');
 const members = require('./services/members');
 const dashboard = require('./services/dashboard');
 const sops = require('./services/sops');
@@ -37,6 +40,10 @@ const EVENT_FIELDS = { title: str('Event title'), type: { type: 'string', enum: 
 
 const NOTE_FIELDS = { title: str('Meeting title (defaults to the event title)'), meetingDate: str('YYYY-MM-DD (defaults to the event date)'), eventId: num('The calendar event this note is for (one note per event)'), clientId: num('Client id'), projectId: num('Project id'), summary: str('Short summary'), agenda: str('Agenda'), discussion: str('What was discussed'), decisions: str('Decisions made, one per line'), requests: str('Requests from the client, one per line'), followUps: str('Follow-ups, one per line') };
 
+const REQUEST_FIELDS = { title: str('What the client asks for'), description: str('Details'), clientId: num('Client id'), projectId: num('Project id of the same client'), requestedBy: str('Who asked, such as the contact name'), dueDate: str('YYYY-MM-DD'), ownerId: num('Team member id'), status: { type: 'string', enum: ['new', 'reviewing', 'waiting', 'completed'], description: 'Approving, rejecting or starting work is for a person' } };
+const DECISION_FIELDS = { title: str('What was decided'), details: str('Why, and the details'), decidedOn: str('YYYY-MM-DD'), status: { type: 'string', enum: ['active', 'reversed'] }, clientId: num('Client id'), projectId: num('Project id') };
+const FOLLOWUP_FIELDS = { title: str('What must be followed up'), details: str('Details'), dueDate: str('YYYY-MM-DD'), assigneeId: num('Team member id'), status: { type: 'string', enum: ['open', 'done', 'cancelled'] }, clientId: num('Client id'), projectId: num('Project id') };
+
 const PLAN_NOTE = ' With a key that asks first, the change waits in the AI inbox until a person approves it.';
 const asPlan = (summary, action, args) => ({ summary, steps: [{ action, args }] });
 const text = (value) => (typeof value === 'string' ? value : JSON.stringify(value));
@@ -54,6 +61,10 @@ const TOOLS = [
   { name: 'get_event', description: 'One calendar event with its attendees and links.', schema: obj({ id: num('Event id') }, ['id']), run: (db, ctx, a) => events.getEvent(db, ctx, a.id) },
   { name: 'list_meeting_notes', description: 'Meeting notes, newest first, without the long sections. Filters: clientId, projectId, status (draft or final), q (title or summary), from and to dates.', schema: obj({ clientId: num('Client id'), projectId: num('Project id'), status: str('draft or final'), q: str('Search text'), from: str('YYYY-MM-DD'), to: str('YYYY-MM-DD') }), run: (db, ctx, a) => meetingnotes.listNotes(db, ctx, a) },
   { name: 'get_meeting_note', description: 'One meeting note with every section.', schema: obj({ id: num('Meeting note id') }, ['id']), run: (db, ctx, a) => meetingnotes.getNote(db, ctx, a.id) },
+  { name: 'list_requests', description: 'Client requests, newest first. Filters: clientId, projectId, status (new, reviewing, approved, in_progress, waiting, completed, rejected), open (not completed or rejected), q.', schema: obj({ clientId: num('Client id'), projectId: num('Project id'), status: str('Request status'), open: { type: 'boolean' }, q: str('Search text') }), run: (db, ctx, a) => requests.listRequests(db, ctx, { ...a, open: a.open ? '1' : '' }) },
+  { name: 'get_request', description: 'One client request with its client, project, source meeting note and linked task.', schema: obj({ id: num('Request id') }, ['id']), run: (db, ctx, a) => requests.getRequest(db, ctx, a.id) },
+  { name: 'list_decisions', description: 'Recorded decisions, newest first. Filters: clientId, projectId, status (active or reversed), q.', schema: obj({ clientId: num('Client id'), projectId: num('Project id'), status: str('active or reversed'), q: str('Search text') }), run: (db, ctx, a) => decisions.listDecisions(db, ctx, a) },
+  { name: 'list_follow_ups', description: 'Follow-ups, open first by due date. Filters: clientId, projectId, status (open, done, cancelled), assigneeId, mine, overdue, q.', schema: obj({ clientId: num('Client id'), projectId: num('Project id'), status: str('open, done or cancelled'), assigneeId: num('Team member id'), mine: { type: 'boolean' }, overdue: { type: 'boolean' }, q: str('Search text') }), run: (db, ctx, a) => followups.listFollowUps(db, ctx, { ...a, mine: a.mine ? '1' : '', overdue: a.overdue ? '1' : '' }) },
   { name: 'list_team', description: 'The people in the agency with their ids, roles and job titles. Use the ids to assign work.', schema: obj(),
     run: (db, ctx) => members.listMembers(db, ctx).map((m) => ({ id: m.id, username: m.username, displayName: m.displayName, role: m.role, isActive: m.isActive, jobTitle: m.jobTitle, department: m.department })) },
   { name: 'get_workload', description: 'Each active person\'s open tasks, overdue tasks and open estimated hours against weekly capacity.', schema: obj(),
@@ -88,6 +99,13 @@ const TOOLS = [
   { name: 'update_event', write: true, description: `Change a calendar event, including cancelling it. AI cannot delete events.${PLAN_NOTE}`, schema: obj({ id: num('Event id'), ...EVENT_FIELDS }, ['id']), submit: (a) => asPlan(`Change event #${a.id}`, 'update_event', a) },
   { name: 'create_meeting_note', write: true, description: `Write structured meeting notes (draft), optionally for a calendar event. Only a person can finalize them.${PLAN_NOTE}`, schema: obj(NOTE_FIELDS), submit: (a) => asPlan(`Write meeting notes "${a.title || `for event #${a.eventId}`}"`, 'create_meeting_note', a) },
   { name: 'update_meeting_note', write: true, description: `Change a draft meeting note. Only a person can finalize or reopen it.${PLAN_NOTE}`, schema: obj({ id: num('Meeting note id'), ...NOTE_FIELDS }, ['id']), submit: (a) => asPlan(`Change meeting note #${a.id}`, 'update_meeting_note', a) },
+  { name: 'create_request', write: true, description: `Log a client request.${PLAN_NOTE}`, schema: obj(REQUEST_FIELDS, ['clientId', 'title']), submit: (a) => asPlan(`Add client request "${a.title}"`, 'create_request', a) },
+  { name: 'update_request', write: true, description: `Change a client request. Approving, rejecting, starting it and converting it to a task are for a person.${PLAN_NOTE}`, schema: obj({ id: num('Request id'), ...REQUEST_FIELDS }, ['id']), submit: (a) => asPlan(`Change client request #${a.id}`, 'update_request', a) },
+  { name: 'create_decision', write: true, description: `Record a decision.${PLAN_NOTE}`, schema: obj(DECISION_FIELDS, ['title', 'decidedOn']), submit: (a) => asPlan(`Record decision "${a.title}"`, 'create_decision', a) },
+  { name: 'update_decision', write: true, description: `Change a decision.${PLAN_NOTE}`, schema: obj({ id: num('Decision id'), ...DECISION_FIELDS }, ['id']), submit: (a) => asPlan(`Change decision #${a.id}`, 'update_decision', a) },
+  { name: 'create_follow_up', write: true, description: `Add a follow-up.${PLAN_NOTE}`, schema: obj(FOLLOWUP_FIELDS, ['title']), submit: (a) => asPlan(`Add follow-up "${a.title}"`, 'create_follow_up', a) },
+  { name: 'update_follow_up', write: true, description: `Change a follow-up, including marking it done.${PLAN_NOTE}`, schema: obj({ id: num('Follow-up id'), ...FOLLOWUP_FIELDS }, ['id']), submit: (a) => asPlan(`Change follow-up #${a.id}`, 'update_follow_up', a) },
+  { name: 'create_records_from_note', write: true, description: `Turn the Decisions, Requests and Follow-ups lines of a meeting note into records linked to it. Safe to repeat. Optional kinds: decisions, requests, followUps.${PLAN_NOTE}`, schema: obj({ noteId: num('Meeting note id'), kinds: { type: 'array', items: { type: 'string', enum: ['decisions', 'requests', 'followUps'] } } }, ['noteId']), submit: (a) => asPlan(`Create records from meeting note #${a.noteId}`, 'create_records_from_note', a) },
   { name: 'add_comment', write: true, description: `Comment on a task.${PLAN_NOTE}`, schema: obj({ taskId: num('Task id'), body: str('The comment') }, ['taskId', 'body']), submit: (a) => asPlan(`Comment on task #${a.taskId}`, 'add_comment', a) },
 ];
 

@@ -57,6 +57,15 @@ const ACTIONS = {
   // Meeting notes. Everyone may be shown the ones they can see and write the ones they attend; Managers finalize.
   'notes.view': ALL,
   'notes.manage': MANAGERS,
+  // Client requests, decisions and follow-ups that come out of meetings.
+  'requests.view': NOT_CONTRACTOR,
+  'requests.create': NOT_CONTRACTOR,
+  'requests.manage': MANAGERS,
+  'decisions.view': NOT_CONTRACTOR,
+  'decisions.manage': MANAGERS,
+  'followups.view': ALL,
+  'followups.create': NOT_CONTRACTOR,
+  'followups.manage': MANAGERS,
   'ai.use': ALL,
   'ai.manage': OWNER_ADMIN,
   'ai.approve': OWNER_ADMIN,

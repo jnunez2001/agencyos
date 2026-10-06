@@ -11,17 +11,23 @@ const projects = require('./projects');
 const tasks = require('./tasks');
 const events = require('./events');
 const meetingnotes = require('./meetingnotes');
+const noterecords = require('./noterecords');
+const requests = require('./requests');
+const decisions = require('./decisions');
+const followups = require('./followups');
 const sops = require('./sops');
 const goals = require('./goals');
 const results = require('./results');
 const reports = require('./reports');
 
 const MAX_STEPS = 50;
-const REF_KEYS = ['clientId', 'projectId', 'taskId', 'sopId', 'goalId', 'id'];
+const REF_KEYS = ['clientId', 'projectId', 'taskId', 'sopId', 'goalId', 'noteId', 'id'];
 const NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;
 
 // Finalizing or reopening a note is a person's decision.
 const noStatus = (a) => { if (a.status !== undefined) fail(403, 'AI cannot finalize or reopen meeting notes. A manager does that'); return a; };
+// Approving, rejecting or starting work on a client request is a person's decision.
+const noRequestVerdict = (a) => { if (['approved', 'rejected', 'in_progress'].includes(a.status)) fail(403, 'AI cannot approve, reject or start a client request. A manager decides'); return a; };
 const withId = (args, fn) => { const { id, ...rest } = args; return fn(id, rest); };
 
 // Everything an AI can do. Nothing here touches members, roles, passwords, keys or settings, and nothing deletes.
@@ -37,6 +43,13 @@ const ACTIONS = {
   update_event: (db, ctx, a) => withId(a, (id, rest) => events.updateEvent(db, ctx, id, rest)),
   create_meeting_note: (db, ctx, a) => meetingnotes.createNote(db, ctx, noStatus(a)),
   update_meeting_note: (db, ctx, a) => withId(noStatus(a), (id, rest) => meetingnotes.updateNote(db, ctx, id, rest)),
+  create_request: (db, ctx, a) => requests.createRequest(db, ctx, noRequestVerdict(a)),
+  update_request: (db, ctx, a) => withId(noRequestVerdict(a), (id, rest) => requests.updateRequest(db, ctx, id, rest)),
+  create_decision: (db, ctx, a) => decisions.createDecision(db, ctx, a),
+  update_decision: (db, ctx, a) => withId(a, (id, rest) => decisions.updateDecision(db, ctx, id, rest)),
+  create_follow_up: (db, ctx, a) => followups.createFollowUp(db, ctx, a),
+  update_follow_up: (db, ctx, a) => withId(a, (id, rest) => followups.updateFollowUp(db, ctx, id, rest)),
+  create_records_from_note: (db, ctx, a) => { const { noteId, ...rest } = a; const r = noterecords.extractRecords(db, ctx, noteId, rest); return { id: r.noteId, name: `${r.created.decisions.length} decisions, ${r.created.requests.length} requests, ${r.created.followUps.length} follow-ups` }; },
   add_comment: (db, ctx, a) => { const { taskId, ...rest } = a; return tasks.addComment(db, ctx, taskId, rest); },
   record_result: (db, ctx, a) => { const { clientId, ...rest } = a; const r = results.recordResult(db, ctx, clientId, rest); return { id: r.id, name: `${r.metric}: ${r.value}` }; },
   create_report: (db, ctx, a) => reports.createReport(db, ctx, a),
@@ -142,6 +155,13 @@ function describe(db, organizationId, steps) {
       case 'update_event': line = `Change event ${nameOf('events', 'title', a.id)}: ${changed}`; break;
       case 'create_meeting_note': line = `Write meeting notes "${a.title || nameOf('events', 'title', a.eventId)}"`; break;
       case 'update_meeting_note': line = `Change meeting notes ${nameOf('meeting_notes', 'title', a.id)}: ${changed}`; break;
+      case 'create_request': line = `Add client request "${a.title}" for ${nameOf('clients', 'name', a.clientId)}`; break;
+      case 'update_request': line = `Change client request ${nameOf('client_requests', 'title', a.id)}: ${changed}`; break;
+      case 'create_decision': line = `Record decision "${a.title}"`; break;
+      case 'update_decision': line = `Change decision ${nameOf('decisions', 'title', a.id)}: ${changed}`; break;
+      case 'create_follow_up': line = `Add follow-up "${a.title}"${a.dueDate ? ` (due ${a.dueDate})` : ''}`; break;
+      case 'update_follow_up': line = `Change follow-up ${nameOf('follow_ups', 'title', a.id)}: ${changed}`; break;
+      case 'create_records_from_note': line = `Create decisions, requests and follow-ups from meeting notes ${nameOf('meeting_notes', 'title', a.noteId)}`; break;
       case 'record_result': line = `Record ${a.metric} = ${a.value}${a.unit ? ` ${a.unit}` : ''} for ${nameOf('clients', 'name', a.clientId)}${a.recordedOn ? ` (${a.recordedOn})` : ''}`; break;
       case 'create_report': line = `Create report "${a.title}" for ${nameOf('clients', 'name', a.clientId)}`; break;
       case 'update_report': line = `Change report ${nameOf('reports', 'title', a.id)}: ${changed}`; break;

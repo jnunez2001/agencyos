@@ -13,6 +13,10 @@ const clients = require('../services/clients');
 const projects = require('../services/projects');
 const events = require('../services/events');
 const meetingnotes = require('../services/meetingnotes');
+const noterecords = require('../services/noterecords');
+const requests = require('../services/requests');
+const decisions = require('../services/decisions');
+const followups = require('../services/followups');
 const tasks = require('../services/tasks');
 const apikeys = require('../services/apikeys');
 const aiplans = require('../services/aiplans');
@@ -166,6 +170,25 @@ module.exports = function apiRouter(db, { google = null } = {}) {
   r.get('/meeting-notes/:id', (req, res) => res.json(meetingnotes.getNote(db, ctxOf(req), idParam(req))));
   r.patch('/meeting-notes/:id', (req, res) => res.json(meetingnotes.updateNote(db, ctxOf(req), idParam(req), req.body)));
   r.delete('/meeting-notes/:id', (req, res) => res.json(meetingnotes.deleteNote(db, ctxOf(req), idParam(req))));
+  r.post('/meeting-notes/:id/records', (req, res) => res.json(noterecords.extractRecords(db, ctxOf(req), idParam(req), { kinds: req.body && req.body.kinds })));
+  r.get('/meeting-notes/:id/records', (req, res) => res.json(noterecords.recordsOfNote(db, ctxOf(req), idParam(req))));
+  // ---- client requests, decisions, follow-ups ----
+  r.get('/requests', (req, res) => res.json(requests.listRequests(db, ctxOf(req), req.query)));
+  r.post('/requests', (req, res) => res.json(requests.createRequest(db, ctxOf(req), req.body)));
+  r.get('/requests/:id', (req, res) => res.json(requests.getRequest(db, ctxOf(req), idParam(req))));
+  r.patch('/requests/:id', (req, res) => res.json(requests.updateRequest(db, ctxOf(req), idParam(req), req.body)));
+  r.post('/requests/:id/convert', (req, res) => res.json(requests.convertToTask(db, ctxOf(req), idParam(req), req.body)));
+  r.delete('/requests/:id', (req, res) => res.json(requests.deleteRequest(db, ctxOf(req), idParam(req))));
+  r.get('/decisions', (req, res) => res.json(decisions.listDecisions(db, ctxOf(req), req.query)));
+  r.post('/decisions', (req, res) => res.json(decisions.createDecision(db, ctxOf(req), req.body)));
+  r.get('/decisions/:id', (req, res) => res.json(decisions.getDecision(db, ctxOf(req), idParam(req))));
+  r.patch('/decisions/:id', (req, res) => res.json(decisions.updateDecision(db, ctxOf(req), idParam(req), req.body)));
+  r.delete('/decisions/:id', (req, res) => res.json(decisions.deleteDecision(db, ctxOf(req), idParam(req))));
+  r.get('/follow-ups', (req, res) => res.json(followups.listFollowUps(db, ctxOf(req), req.query)));
+  r.post('/follow-ups', (req, res) => res.json(followups.createFollowUp(db, ctxOf(req), req.body)));
+  r.get('/follow-ups/:id', (req, res) => res.json(followups.getFollowUp(db, ctxOf(req), idParam(req))));
+  r.patch('/follow-ups/:id', (req, res) => res.json(followups.updateFollowUp(db, ctxOf(req), idParam(req), req.body)));
+  r.delete('/follow-ups/:id', (req, res) => res.json(followups.deleteFollowUp(db, ctxOf(req), idParam(req))));
   r.get('/projects/:id', (req, res) => res.json(projects.getProject(db, ctxOf(req), idParam(req))));
   r.patch('/projects/:id', (req, res) => res.json(projects.updateProject(db, ctxOf(req), idParam(req), req.body)));
 

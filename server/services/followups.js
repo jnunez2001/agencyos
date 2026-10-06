@@ -1,0 +1,122 @@
+// Joshua Nunez
+// Follow-ups: small promises that come out of meetings. Anyone but a Contractor adds them. The assignee, the creator
+// and Managers change them; a Contractor sees only the ones assigned to them.
+const { logActivity } = require('./audit');
+const { ServiceError } = require('./errors');
+const { cleanText, cleanOptional, cleanEnum, cleanDate, cleanTeamMember, diff } = require('./validate');
+const clients = require('./clients');
+const projects = require('./projects');
+const { today } = require('./dates');
+const perms = require('./permissions');
+
+const STATUSES = ['open', 'done', 'cancelled'];
+const FIELDS = ['title', 'details', 'dueDate', 'assigneeId', 'status', 'clientId', 'projectId'];
+const logCtx = (ctx) => ({ organizationId: ctx.organizationId, actorUserId: ctx.actor.id, source: ctx.source || 'web', ip: ctx.ip || null });
+const need = (ctx, action) => { if (!perms.can(ctx.actor.role, action)) throw new ServiceError(403, 'Not allowed'); };
+const manages = (ctx) => perms.can(ctx.actor.role, 'followups.manage');
+const seesAll = (ctx) => perms.can(ctx.actor.role, 'clients.view');
+
+const SELECT = `
+  SELECT f.id, f.title, f.details, f.due_date AS dueDate, f.assignee_id AS assigneeId, au.display_name AS assigneeName, f.status, f.completed_at AS completedAt,
+         f.client_id AS clientId, c.name AS clientName, f.project_id AS projectId, p.name AS projectName,
+         f.source_note_id AS sourceNoteId, n.title AS sourceNoteTitle, f.created_by AS createdBy, cu.display_name AS createdByName, f.created_at AS createdAt, f.updated_at AS updatedAt
+    FROM follow_ups f
+    LEFT JOIN users au ON au.id = f.assignee_id
+    LEFT JOIN clients c ON c.id = f.client_id AND c.organization_id = f.organization_id
+    LEFT JOIN projects p ON p.id = f.project_id AND p.organization_id = f.organization_id
+    LEFT JOIN meeting_notes n ON n.id = f.source_note_id AND n.organization_id = f.organization_id
+    LEFT JOIN users cu ON cu.id = f.created_by
+   WHERE f.organization_id = ?`;
+
+const scope = (ctx) => (seesAll(ctx) ? '' : ' AND f.assignee_id = ?');
+const scopeParams = (ctx) => (seesAll(ctx) ? [] : [ctx.actor.id]);
+
+function shape(db, ctx, row) {
+  const mine = row.assigneeId === ctx.actor.id || row.createdBy === ctx.actor.id;
+  const { clientName, projectName, ...rest } = row;
+  return { ...rest, clientName: seesAll(ctx) ? clientName : null, projectName: seesAll(ctx) ? projectName : null,
+    isOverdue: !!(row.dueDate && row.status === 'open' && row.dueDate < today(db, ctx)), canEdit: manages(ctx) || mine, canDelete: manages(ctx) };
+}
+
+function find(db, ctx, id) {
+  const row = db.prepare(`${SELECT} AND f.id = ?${scope(ctx)}`).get(ctx.organizationId, Number(id), ...scopeParams(ctx));
+  if (!row) throw new ServiceError(404, 'Follow-up not found');
+  return row;
+}
+function getFollowUp(db, ctx, id) { need(ctx, 'followups.view'); return shape(db, ctx, find(db, ctx, id)); }
+
+function listFollowUps(db, ctx, { clientId, projectId, status, assigneeId, mine, overdue, q } = {}) {
+  need(ctx, 'followups.view');
+  const where = []; const params = [ctx.organizationId];
+  if (clientId) { where.push('f.client_id = ?'); params.push(Number(clientId)); }
+  if (projectId) { where.push('f.project_id = ?'); params.push(Number(projectId)); }
+  if (status) { cleanEnum(status, STATUSES, 'status'); where.push('f.status = ?'); params.push(status); }
+  if (assigneeId) { where.push('f.assignee_id = ?'); params.push(Number(assigneeId)); }
+  if (mine) { where.push('f.assignee_id = ?'); params.push(ctx.actor.id); }
+  if (overdue) { where.push("f.status = 'open' AND f.due_date < ?"); params.push(today(db, ctx)); }
+  if (q) { where.push("f.title LIKE ? ESCAPE '\\'"); params.push(`%${String(q).replace(/[\\%_]/g, '\\$&')}%`); }
+  return db.prepare(`${SELECT} ${where.map((w) => `AND ${w}`).join(' ')}${scope(ctx)} ORDER BY (f.status != 'open'), f.due_date IS NULL, f.due_date, f.id DESC LIMIT 300`).all(...params, ...scopeParams(ctx)).map((r) => shape(db, ctx, r));
+}
+
+function cleanLinks(db, ctx, clientId, projectId) {
+  let client = null; let project = null;
+  if (projectId != null && projectId !== '') project = projects.find(db, ctx.organizationId, projectId);
+  if (clientId != null && clientId !== '') client = clients.find(db, ctx.organizationId, clientId);
+  if (project) {
+    if (client && client.id !== project.clientId) throw new ServiceError(400, 'That project belongs to another client');
+    client = client || clients.find(db, ctx.organizationId, project.clientId);
+  }
+  return { clientId: client ? client.id : null, projectId: project ? project.id : null };
+}
+
+function createFollowUp(db, ctx, input = {}, { sourceNoteId = null } = {}) {
+  need(ctx, 'followups.create');
+  return db.transaction(() => {
+    const next = { title: cleanText(input.title, 'Title', 1, 200), details: cleanOptional(input.details, 'Details', 10000), dueDate: cleanDate(input.dueDate, 'Due date'),
+      assigneeId: cleanTeamMember(db, ctx.organizationId, input.assigneeId), ...cleanLinks(db, ctx, input.clientId, input.projectId) };
+    const id = Number(db.prepare('INSERT INTO follow_ups (organization_id, client_id, project_id, title, details, due_date, assignee_id, source_note_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(ctx.organizationId, next.clientId, next.projectId, next.title, next.details, next.dueDate, next.assigneeId, sourceNoteId, ctx.actor.id).lastInsertRowid);
+    logActivity(db, { ...logCtx(ctx), action: 'followup.create', objectType: 'follow_up', objectId: id, after: { title: next.title, assigneeId: next.assigneeId, dueDate: next.dueDate, ...(sourceNoteId ? { sourceNoteId } : {}) } });
+    return getFollowUp(db, ctx, id);
+  })();
+}
+
+function updateFollowUp(db, ctx, id, patch = {}) {
+  need(ctx, 'followups.view');
+  return db.transaction(() => {
+    const current = find(db, ctx, id);
+    if (!shape(db, ctx, current).canEdit) throw new ServiceError(403, 'Not allowed');
+    // Someone who is not a manager may only mark a follow-up done, cancelled or open again.
+    if (!manages(ctx) && Object.keys(patch).some((k) => k !== 'status') && current.createdBy !== ctx.actor.id) throw new ServiceError(403, 'Not allowed');
+    const next = { ...current };
+    if (patch.title !== undefined) next.title = cleanText(patch.title, 'Title', 1, 200);
+    if (patch.details !== undefined) next.details = cleanOptional(patch.details, 'Details', 10000);
+    if (patch.dueDate !== undefined) next.dueDate = cleanDate(patch.dueDate, 'Due date');
+    if (patch.assigneeId !== undefined) next.assigneeId = cleanTeamMember(db, ctx.organizationId, patch.assigneeId);
+    if (patch.status !== undefined) next.status = cleanEnum(patch.status, STATUSES, 'status');
+    if (patch.clientId !== undefined || patch.projectId !== undefined) {
+      const clientId = patch.clientId !== undefined ? patch.clientId : current.clientId;
+      const projectId = patch.projectId !== undefined ? patch.projectId : (patch.clientId !== undefined && patch.clientId !== current.clientId ? null : current.projectId);
+      Object.assign(next, cleanLinks(db, ctx, clientId, projectId));
+    }
+    const d = diff(current, next, FIELDS);
+    if (!d.changed) return shape(db, ctx, current);
+    const completing = next.status === 'done' && current.status !== 'done';
+    db.prepare("UPDATE follow_ups SET title = ?, details = ?, due_date = ?, assignee_id = ?, status = ?, client_id = ?, project_id = ?, completed_at = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE organization_id = ? AND id = ?")
+      .run(next.title, next.details, next.dueDate, next.assigneeId, next.status, next.clientId, next.projectId, next.status === 'done' ? (completing ? new Date().toISOString() : current.completedAt) : null, ctx.organizationId, current.id);
+    logActivity(db, { ...logCtx(ctx), action: 'followup.update', objectType: 'follow_up', objectId: current.id, before: d.before, after: d.after });
+    return getFollowUp(db, ctx, id);
+  })();
+}
+
+function deleteFollowUp(db, ctx, id) {
+  need(ctx, 'followups.manage');
+  return db.transaction(() => {
+    const current = find(db, ctx, id);
+    db.prepare('DELETE FROM follow_ups WHERE organization_id = ? AND id = ?').run(ctx.organizationId, current.id);
+    logActivity(db, { ...logCtx(ctx), action: 'followup.delete', objectType: 'follow_up', objectId: current.id, before: { title: current.title } });
+    return { deleted: true };
+  })();
+}
+
+module.exports = { STATUSES, listFollowUps, getFollowUp, createFollowUp, updateFollowUp, deleteFollowUp };

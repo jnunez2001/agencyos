@@ -81,3 +81,52 @@ test('meeting notes over HTTP and through AI: AI drafts, only a person finalizes
   assert.equal((await o.call('DELETE', `/meeting-notes/${id}`)).status, 200);
   await app.close();
 });
+
+test('records over HTTP and AI: notes become records, requests convert to tasks, AI never decides a request', async () => {
+  const app = await setUp();
+  const o = app.owner;
+  const sarah = app.client(); await sarah.signIn('sarah');
+  const cole = app.client(); await cole.signIn('cole');
+  const c = (await o.call('POST', '/clients', { name: 'Acme' })).data;
+  const p = (await o.call('POST', '/projects', { clientId: c.id, name: 'Site' })).data;
+  const n = (await o.call('POST', '/meeting-notes', { title: 'Kickoff', meetingDate: '2026-10-12', clientId: c.id, projectId: p.id, decisions: '- Use WordPress', requests: '- Add booking', followUps: '- Send quote' })).data;
+  assert.equal((await sarah.call('POST', `/meeting-notes/${n.id}/records`, {})).status, 403);
+  const out = await o.call('POST', `/meeting-notes/${n.id}/records`, {});
+  assert.deepEqual([out.data.created.decisions.length, out.data.created.requests.length, out.data.created.followUps.length], [1, 1, 1]);
+  assert.deepEqual((await o.call('GET', `/meeting-notes/${n.id}/records`)).data, { decisions: 1, requests: 1, followUps: 1 });
+  const req = (await sarah.call('GET', '/requests')).data[0];
+  assert.equal(req.sourceNoteTitle, 'Kickoff');
+  assert.equal((await cole.call('GET', '/requests')).status, 403);
+  assert.equal((await cole.call('GET', '/decisions')).status, 403);
+  assert.equal((await cole.call('GET', '/follow-ups')).data.length, 0);
+  const conv = await o.call('POST', `/requests/${req.id}/convert`, {});
+  assert.equal(conv.status, 200, JSON.stringify(conv.data));
+  assert.equal(conv.data.request.taskId, conv.data.task.id);
+  assert.equal((await sarah.call('POST', `/requests/${req.id}/convert`, {})).status, 403);
+  const fu = (await o.call('GET', '/follow-ups')).data[0];
+  assert.equal((await o.call('PATCH', `/follow-ups/${fu.id}`, { status: 'done', dueDate: '2026-10-20' })).data.status, 'done');
+  assert.equal((await o.call('DELETE', `/decisions/${(await o.call('GET', '/decisions')).data[0].id}`)).status, 200);
+
+  const key = (await o.call('POST', '/api-keys', { name: 'rec', access: 'direct' })).data;
+  const ai = mcp(app, key.token);
+  const made = await ai.tool('create_request', { clientId: c.id, title: 'Add a blog' });
+  assert.equal(made.data.status, 'applied');
+  const id = made.data.results[0].id;
+  const verdict = await ai.tool('update_request', { id, status: 'approved' });
+  assert.equal(verdict.isError, true);
+  assert.match(String(verdict.data), /manager decides/i);
+  assert.equal((await ai.tool('update_request', { id, status: 'reviewing' })).data.status, 'applied');
+  assert.equal((await ai.tool('create_follow_up', { title: 'Call the client', dueDate: '2026-10-15' })).data.status, 'applied');
+  assert.equal((await ai.tool('create_decision', { title: 'Go live Nov 1', decidedOn: '2026-10-12' })).data.status, 'applied');
+  const again = await ai.tool('create_records_from_note', { noteId: n.id });
+  assert.equal(again.data.status, 'applied');
+  assert.equal((await ai.tool('list_requests', { open: true })).data.length, 2);
+  assert.equal((await ai.tool('list_follow_ups', {})).data.length, 2);
+  assert.equal((await ai.tool('list_decisions', {})).data.length, 2, 'the decision deleted earlier is made again from the note');
+  const names = (await ai.rpc('tools/list')).result.tools.map((t) => t.name);
+  assert.ok(!names.some((x) => /convert|delete/.test(x)));
+  // follow-ups with a due date show on the calendar
+  const cal = (await o.call('GET', '/calendar?from=2026-10-01&to=2026-10-31')).data;
+  assert.ok(cal.deadlines.some((d) => d.kind === 'follow_up' && d.title === 'Call the client'));
+  await app.close();
+});

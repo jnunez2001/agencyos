@@ -232,6 +232,12 @@ function calendar(db, ctx, { from, to, clientId, userId, includeCancelled } = {}
     if (clientId) { projSql += ' AND p.client_id = ?'; projParams.push(Number(clientId)); }
     for (const p of db.prepare(`${projSql} ORDER BY p.due_date, p.id`).all(...projParams)) deadlines.push({ kind: 'project', id: p.id, title: p.title, date: p.date, status: p.status, clientId: p.clientId, clientName: p.clientName });
   }
+  // Open follow-ups with a due date. A Contractor sees only the ones assigned to them.
+  let fuSql = `SELECT f.id, f.title, f.due_date AS date, f.status, f.assignee_id AS assigneeId, f.client_id AS clientId, c.name AS clientName, f.project_id AS projectId FROM follow_ups f LEFT JOIN clients c ON c.id = f.client_id AND c.organization_id = f.organization_id WHERE f.organization_id = ? AND f.status = 'open' AND f.due_date BETWEEN ? AND ?${sees(ctx) ? '' : ' AND f.assignee_id = ?'}`;
+  const fuParams = [ctx.organizationId, start, end, ...(sees(ctx) ? [] : [ctx.actor.id])];
+  if (clientId) { fuSql += ' AND f.client_id = ?'; fuParams.push(Number(clientId)); }
+  if (who) { fuSql += ' AND f.assignee_id = ?'; fuParams.push(who); }
+  for (const f of db.prepare(`${fuSql} ORDER BY f.due_date, f.id`).all(...fuParams)) deadlines.push({ kind: 'follow_up', id: f.id, title: f.title, date: f.date, status: f.status, assigneeId: f.assigneeId, clientId: sees(ctx) ? f.clientId : null, clientName: sees(ctx) ? f.clientName : null, projectId: f.projectId });
   deadlines.sort((a, b) => a.date.localeCompare(b.date));
   return { from: start, to: end, events, deadlines };
 }
