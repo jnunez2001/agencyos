@@ -155,3 +155,7 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 - Retainers are monthly from the start date's day, one active per client, switched off rather than deleted. Only billable approved or locked time counts as used; submitted time shows as pending. Warning from 80 percent, over above 100.
 - New permissions: `time.log`, `time.review`, `time.view_team`, `retainers.view`, `retainers.manage`.
 - Not done yet: rates and invoicing, rollover of unused hours, timesheet exports, notifications for warnings.
+
+## 2026-10-06: End-to-end check
+
+- `test/e2e-roadmap.test.js` walks one agency through the roadmap's story over HTTP and MCP (client, retainer, meeting, notes, records, request to task, timer and approved time, retainer warning, SOP change published as a new version, search, AI proposals, contractor limits, activity trail). Per-agency isolation is covered by each service's own tests.
