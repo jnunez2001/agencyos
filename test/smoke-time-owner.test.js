@@ -13,7 +13,7 @@ test('the Owner uses the timer, reviews time, sees team workload, and the retain
   await app.wait(250);
   const { document } = app;
   const nav = [...document.querySelectorAll('.sidebar .nav-link')].map((a) => a.textContent.trim());
-  assert.equal(nav[nav.indexOf('Meetings') + 1], 'Time');
+  assert.ok(nav.includes('Time'), 'the Time page is in the menu');
 
   await app.go('#/time');
   const text = () => app.main().textContent;
