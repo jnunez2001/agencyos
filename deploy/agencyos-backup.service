@@ -1,0 +1,16 @@
+# Joshua Nunez
+# UNTESTED on the real server.
+[Unit]
+Description=AgencyOS database backup
+
+[Service]
+Type=oneshot
+User=agencyos
+Group=agencyos
+WorkingDirectory=/opt/agencyos
+Environment=DATA_DIR=/var/lib/agencyos
+ExecStart=/usr/bin/env node scripts/backup.js
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/agencyos
+MemoryMax=128M

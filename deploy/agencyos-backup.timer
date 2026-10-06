@@ -1,0 +1,11 @@
+# Joshua Nunez
+# UNTESTED on the real server.
+[Unit]
+Description=Nightly AgencyOS backup
+
+[Timer]
+OnCalendar=*-*-* 02:45:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -42,4 +42,4 @@ Plain Node 22 or newer, Express, SQLite and plain JavaScript pages with no build
 
 ## Deploying to a small server
 
-`deploy/push.sh root@SERVER` runs the tests, copies the code and installs a systemd service that listens on 127.0.0.1:3200 only, with a 192 MB memory cap. Put it on the web with a Cloudflare Tunnel hostname that points at that port. Run `deploy/set-setup-token.sh` on the server before it is reachable. Nothing here touches other apps on the server.
+`deploy/push.sh root@SERVER` runs the tests, copies the code and installs a systemd service that listens on 127.0.0.1:3200 only, with a 192 MB memory cap. Put it on the web with a Cloudflare Tunnel hostname that points at that port. Run `deploy/set-setup-token.sh` on the server before it is reachable. A nightly backup (02:45) keeps the newest 30 copies in `/var/lib/agencyos/backups`. Copy them to your Mac with `deploy/pull-backups.sh root@SERVER`. Nothing here touches other apps on the server.

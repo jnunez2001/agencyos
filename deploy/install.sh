@@ -3,7 +3,7 @@
 # UNTESTED on the real server.
 # Idempotent installer for AgencyOS. Run on the server as root (deploy/push.sh does this for you).
 # Touches only its own paths: /opt/agencyos, /var/lib/agencyos, /etc/agencyos.env, its own systemd unit and the
-# agencyos user. It does NOT touch Family Money OS, StarkFi, cloudflared, nginx or any other port.
+# agencyos user and its nightly backup timer. It does NOT touch Family Money OS, StarkFi, cloudflared, nginx or any other port.
 set -euo pipefail
 
 APP_DIR=/opt/agencyos
@@ -35,10 +35,11 @@ done
 chown -R root:root "$APP_DIR"
 (cd "$APP_DIR" && npm ci --omit=dev)
 
-cp "$SRC/deploy/agencyos.service" /etc/systemd/system/
+cp "$SRC/deploy/agencyos.service" "$SRC/deploy/agencyos-backup.service" "$SRC/deploy/agencyos-backup.timer" /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable agencyos.service
 systemctl restart agencyos.service
+systemctl enable --now agencyos-backup.timer
 
 echo
 echo "Installed. AgencyOS is listening on 127.0.0.1:${PORT} only."
