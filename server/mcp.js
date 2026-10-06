@@ -7,6 +7,7 @@ const clients = require('./services/clients');
 const projects = require('./services/projects');
 const tasks = require('./services/tasks');
 const events = require('./services/events');
+const meetingnotes = require('./services/meetingnotes');
 const members = require('./services/members');
 const dashboard = require('./services/dashboard');
 const sops = require('./services/sops');
@@ -34,6 +35,8 @@ const TASK_FIELDS = { goalId: num('A goal of the same client'), sopId: num('SOP 
 const EVENT_TYPES = ['client_meeting', 'internal_meeting', 'team_meeting', 'deadline', 'follow_up', 'review', 'sop_review', 'training', 'blocked_time'];
 const EVENT_FIELDS = { title: str('Event title'), type: { type: 'string', enum: EVENT_TYPES }, startsAt: str('Start in UTC like 2026-10-12T14:00:00Z, or a date YYYY-MM-DD when allDay'), endsAt: str('End, same format as startsAt'), allDay: { type: 'boolean' }, location: str('Location or meeting link'), notes: str('Notes'), status: { type: 'string', enum: ['scheduled', 'completed', 'cancelled'] }, clientId: num('Client id'), projectId: num('Project id'), taskId: num('Task id (sets its project and client)'), attendees: { type: 'array', items: { type: 'integer' }, description: 'Team member ids' } };
 
+const NOTE_FIELDS = { title: str('Meeting title (defaults to the event title)'), meetingDate: str('YYYY-MM-DD (defaults to the event date)'), eventId: num('The calendar event this note is for (one note per event)'), clientId: num('Client id'), projectId: num('Project id'), summary: str('Short summary'), agenda: str('Agenda'), discussion: str('What was discussed'), decisions: str('Decisions made, one per line'), requests: str('Requests from the client, one per line'), followUps: str('Follow-ups, one per line') };
+
 const PLAN_NOTE = ' With a key that asks first, the change waits in the AI inbox until a person approves it.';
 const asPlan = (summary, action, args) => ({ summary, steps: [{ action, args }] });
 const text = (value) => (typeof value === 'string' ? value : JSON.stringify(value));
@@ -49,6 +52,8 @@ const TOOLS = [
   { name: 'get_task', description: 'One task with its comments.', schema: obj({ id: num('Task id') }, ['id']), run: (db, ctx, a) => ({ ...tasks.getTask(db, ctx, a.id), comments: tasks.listComments(db, ctx, a.id) }) },
   { name: 'list_events', description: 'The calendar between two dates: events (meetings, deadlines, reviews, blocked time and so on) plus task and project due dates as deadlines. Optional clientId and userId (what that person attends or is assigned). Times are UTC.', schema: obj({ from: str('YYYY-MM-DD'), to: str('YYYY-MM-DD, at most 120 days after from'), clientId: num('Client id'), userId: num('Team member id'), includeCancelled: { type: 'boolean' } }, ['from', 'to']), run: (db, ctx, a) => events.calendar(db, ctx, a) },
   { name: 'get_event', description: 'One calendar event with its attendees and links.', schema: obj({ id: num('Event id') }, ['id']), run: (db, ctx, a) => events.getEvent(db, ctx, a.id) },
+  { name: 'list_meeting_notes', description: 'Meeting notes, newest first, without the long sections. Filters: clientId, projectId, status (draft or final), q (title or summary), from and to dates.', schema: obj({ clientId: num('Client id'), projectId: num('Project id'), status: str('draft or final'), q: str('Search text'), from: str('YYYY-MM-DD'), to: str('YYYY-MM-DD') }), run: (db, ctx, a) => meetingnotes.listNotes(db, ctx, a) },
+  { name: 'get_meeting_note', description: 'One meeting note with every section.', schema: obj({ id: num('Meeting note id') }, ['id']), run: (db, ctx, a) => meetingnotes.getNote(db, ctx, a.id) },
   { name: 'list_team', description: 'The people in the agency with their ids, roles and job titles. Use the ids to assign work.', schema: obj(),
     run: (db, ctx) => members.listMembers(db, ctx).map((m) => ({ id: m.id, username: m.username, displayName: m.displayName, role: m.role, isActive: m.isActive, jobTitle: m.jobTitle, department: m.department })) },
   { name: 'get_workload', description: 'Each active person\'s open tasks, overdue tasks and open estimated hours against weekly capacity.', schema: obj(),
@@ -81,6 +86,8 @@ const TOOLS = [
   { name: 'update_task', write: true, description: `Change a task (status, assignee, due date and so on).${PLAN_NOTE}`, schema: obj({ id: num('Task id'), ...TASK_FIELDS }, ['id']), submit: (a) => asPlan(`Change task #${a.id}`, 'update_task', a) },
   { name: 'create_event', write: true, description: `Schedule a calendar event.${PLAN_NOTE}`, schema: obj(EVENT_FIELDS, ['title', 'startsAt']), submit: (a) => asPlan(`Schedule "${a.title}"`, 'create_event', a) },
   { name: 'update_event', write: true, description: `Change a calendar event, including cancelling it. AI cannot delete events.${PLAN_NOTE}`, schema: obj({ id: num('Event id'), ...EVENT_FIELDS }, ['id']), submit: (a) => asPlan(`Change event #${a.id}`, 'update_event', a) },
+  { name: 'create_meeting_note', write: true, description: `Write structured meeting notes (draft), optionally for a calendar event. Only a person can finalize them.${PLAN_NOTE}`, schema: obj(NOTE_FIELDS), submit: (a) => asPlan(`Write meeting notes "${a.title || `for event #${a.eventId}`}"`, 'create_meeting_note', a) },
+  { name: 'update_meeting_note', write: true, description: `Change a draft meeting note. Only a person can finalize or reopen it.${PLAN_NOTE}`, schema: obj({ id: num('Meeting note id'), ...NOTE_FIELDS }, ['id']), submit: (a) => asPlan(`Change meeting note #${a.id}`, 'update_meeting_note', a) },
   { name: 'add_comment', write: true, description: `Comment on a task.${PLAN_NOTE}`, schema: obj({ taskId: num('Task id'), body: str('The comment') }, ['taskId', 'body']), submit: (a) => asPlan(`Comment on task #${a.taskId}`, 'add_comment', a) },
 ];
 

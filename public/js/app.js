@@ -16,6 +16,7 @@ import { qaView } from './views/qa.js';
 import { reportsView } from './views/reports.js';
 import { googleResultView } from './views/googleresult.js';
 import { calendarView } from './views/calendar.js';
+import { meetingsView } from './views/meetings.js';
 import { tasksView } from './views/tasks.js';
 import { projectsView } from './views/projects.js';
 import { clientsView } from './views/clients.js';
@@ -24,7 +25,7 @@ import { visibleNav, bottomNav } from './nav.js';
 const root = document.getElementById('app');
 let session = null;
 
-const VIEWS = { dashboard: dashboardView, calendar: calendarView, tasks: tasksView, projects: projectsView, clients: clientsView, ai: aiView, connect: connectView, sops: sopsView, qa: qaView, reports: reportsView, google: googleResultView, team: teamView, activity: activityView, settings: settingsView, profile: profileView };
+const VIEWS = { dashboard: dashboardView, calendar: calendarView, meetings: meetingsView, tasks: tasksView, projects: projectsView, clients: clientsView, ai: aiView, connect: connectView, sops: sopsView, qa: qaView, reports: reportsView, google: googleResultView, team: teamView, activity: activityView, settings: settingsView, profile: profileView };
 
 function currentTheme() { return document.documentElement.getAttribute('data-theme') || 'light'; }
 function toggleTheme() {

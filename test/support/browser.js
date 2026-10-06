@@ -8,12 +8,12 @@ const { JSDOM } = require('jsdom');
 const PUBLIC = path.resolve(__dirname, '..', '..', 'public');
 
 const ROLES = ['owner', 'admin', 'manager', 'employee', 'contractor'];
-const WORK = { 'events.view': 1, 'events.own': 1, 'events.manage': 1, 'integrations.manage': 1, 'integrations.accounts': 1, 'results.view': 1, 'results.record': 1, 'reports.view': 1, 'reports.manage': 1, 'reports.approve': 1, 'services.view': 1, 'sops.view': 1, 'sops.manage': 1, 'qa.review': 1, 'clients.view': 1, 'clients.manage': 1, 'projects.view': 1, 'projects.manage': 1, 'tasks.view': 1, 'tasks.manage': 1, 'tasks.work': 1, 'dashboard.agency': 1 };
+const WORK = { 'notes.view': 1, 'notes.manage': 1, 'events.view': 1, 'events.own': 1, 'events.manage': 1, 'integrations.manage': 1, 'integrations.accounts': 1, 'results.view': 1, 'results.record': 1, 'reports.view': 1, 'reports.manage': 1, 'reports.approve': 1, 'services.view': 1, 'sops.view': 1, 'sops.manage': 1, 'qa.review': 1, 'clients.view': 1, 'clients.manage': 1, 'projects.view': 1, 'projects.manage': 1, 'tasks.view': 1, 'tasks.manage': 1, 'tasks.work': 1, 'dashboard.agency': 1 };
 const CAN = {
   owner: { 'org.security': 1, 'services.manage': 1, 'org.view': 1, 'org.update': 1, 'members.list': 1, 'members.create': 1, 'members.manage': 1, 'profile.edit_others': 1, 'profile.edit_self': 1, 'activity.view': 1, 'dashboard.team': 1, 'ai.use': 1, 'ai.manage': 1, 'ai.approve': 1, ...WORK },
   manager: { 'ai.use': 1, 'org.view': 1, 'members.list': 1, 'profile.edit_self': 1, 'dashboard.team': 1, ...WORK },
-  employee: { 'events.view': 1, 'events.own': 1, 'results.view': 1, 'results.record': 1, 'reports.view': 1, 'sops.view': 1, 'ai.use': 1, 'org.view': 1, 'members.list': 1, 'profile.edit_self': 1, 'clients.view': 1, 'projects.view': 1, 'tasks.view': 1, 'tasks.work': 1, 'dashboard.agency': 1 },
-  contractor: { 'events.view': 1, 'events.own': 1, 'ai.use': 1, 'org.view': 1, 'profile.edit_self': 1, 'tasks.view': 1, 'tasks.work': 1 },
+  employee: { 'notes.view': 1, 'events.view': 1, 'events.own': 1, 'results.view': 1, 'results.record': 1, 'reports.view': 1, 'sops.view': 1, 'ai.use': 1, 'org.view': 1, 'members.list': 1, 'profile.edit_self': 1, 'clients.view': 1, 'projects.view': 1, 'tasks.view': 1, 'tasks.work': 1, 'dashboard.agency': 1 },
+  contractor: { 'notes.view': 1, 'events.view': 1, 'events.own': 1, 'ai.use': 1, 'org.view': 1, 'profile.edit_self': 1, 'tasks.view': 1, 'tasks.work': 1 },
 };
 CAN.admin = CAN.owner;
 
@@ -44,6 +44,7 @@ const EVENTS = [
   { id: 1, title: 'Kickoff call', type: 'client_meeting', startsAt: new Date(Date.UTC(2026, 9, 12, 14, 0)).toISOString().slice(0, 19) + 'Z', endsAt: new Date(Date.UTC(2026, 9, 12, 15, 0)).toISOString().slice(0, 19) + 'Z', allDay: false, location: 'Zoom', notes: 'Agenda in the doc', status: 'scheduled', clientId: 1, clientName: 'Acme Dental', projectId: 1, projectName: 'New website', taskId: null, taskTitle: null, meetingNoteId: null, createdBy: 3, createdAt: NOW, updatedAt: NOW, attendees: [{ id: 1, displayName: 'Josh Nunez' }, { id: 3, displayName: 'Mark Cruz' }] },
   { id: 2, title: 'Team retreat', type: 'team_meeting', startsAt: '2026-10-20', endsAt: '2026-10-21', allDay: true, location: '', notes: '', status: 'scheduled', clientId: null, clientName: null, projectId: null, projectName: null, taskId: null, taskTitle: null, meetingNoteId: null, createdBy: 1, createdAt: NOW, updatedAt: NOW, attendees: [] },
 ];
+const NOTE = { id: 1, title: 'Kickoff call', meetingDate: '2026-10-12', summary: 'Good call', agenda: '', discussion: 'Talked about the website', decisions: 'Use WordPress', requests: 'Send the logo', followUps: 'Mark sends a quote', status: 'draft', eventId: 1, clientId: 1, clientName: 'Acme Dental', projectId: 1, projectName: 'New website', createdBy: 3, createdByName: 'Mark Cruz', finalizedBy: null, finalizedByName: null, finalizedAt: null, createdAt: NOW, updatedAt: NOW };
 const SERVICES = [{ id: 1, name: 'SEO', isActive: true }, { id: 2, name: 'Web Development', isActive: true }];
 const clientRow = (id, name, status, openProjects) => ({ id, services: id === 1 ? [{ id: 1, name: 'SEO' }] : [], accountOwnerId: id === 1 ? 3 : null, accountOwnerName: id === 1 ? 'Mark Cruz' : null, startDate: id === 1 ? '2026-09-01' : null, name, status, website: id === 1 ? 'https://acme.example' : '', industry: id === 1 ? 'Dental' : '', notes: id === 1 ? 'Prefers email' : '', openProjects, createdAt: NOW, updatedAt: NOW });
 const CLIENTS = [clientRow(1, 'Acme Dental', 'active', 1), clientRow(2, 'Beta Bakery', 'paused', 0)];
@@ -122,6 +123,11 @@ function answers(role, { mustChange = false, empty = false, signedOut = false } 
     if (pathname === '/clients' && method === 'GET') return CLIENTS;
     if (/^\/clients\/\d+$/.test(pathname) && method === 'GET') return { ...CLIENTS[0], contacts: [{ id: 1, clientId: 1, name: 'Dr. Lee', email: 'lee@acme.example', phone: '', roleTitle: 'Owner', isPrimary: true }, { id: 2, clientId: 1, name: 'Front desk', email: '', phone: '555 0100', roleTitle: '', isPrimary: false }], projects: [{ id: 1, name: 'New website', status: 'active', dueDate: '2030-01-31', openTasks: 2, goalTitle: 'Increase qualified organic leads' }], goals: [GOAL] };
     if (pathname === '/calendar' && method === 'GET') return { from: '2026-10-01', to: '2026-10-31', events: EVENTS.map((e) => ({ ...e, canEdit: !!can['events.manage'], canDelete: !!can['events.manage'] })), deadlines: [{ kind: 'task', id: 1, title: 'Homepage copy', date: '2026-10-14', status: 'todo', assigneeId: 1, clientId: 1, clientName: 'Acme Dental', projectId: 1 }, { kind: 'project', id: 1, title: 'New website', date: '2026-10-30', status: 'active', clientId: 1, clientName: 'Acme Dental' }] };
+    if (pathname === '/meeting-notes' && method === 'GET') { const { discussion, decisions, requests, followUps, agenda, ...short } = NOTE; return [{ ...short, canEdit: true, canFinalize: !!can['notes.manage'], canDelete: !!can['notes.manage'] }]; }
+    if (pathname === '/meeting-notes' && method === 'POST') return { ...NOTE, id: 7, ...body };
+    if (/^\/meeting-notes\/\d+$/.test(pathname) && method === 'GET') return { ...NOTE, canEdit: true, canFinalize: !!can['notes.manage'], canDelete: !!can['notes.manage'] };
+    if (/^\/meeting-notes\/\d+$/.test(pathname) && method === 'PATCH') return { ...NOTE, ...body, canEdit: true, canFinalize: true, canDelete: true };
+    if (/^\/meeting-notes\/\d+$/.test(pathname) && method === 'DELETE') return { deleted: true };
     if (pathname === '/events' && method === 'POST') return { ...EVENTS[0], id: 9, ...body };
     if (/^\/events\/\d+$/.test(pathname) && method === 'PATCH') return { ...EVENTS[0], ...body };
     if (/^\/events\/\d+$/.test(pathname) && method === 'DELETE') return { deleted: true };

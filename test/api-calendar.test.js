@@ -53,3 +53,31 @@ test('AI can read the calendar and propose events, but cannot delete', async () 
   assert.equal((await ai.tool('get_event', { id: listed[0].id })).data.title, 'Strategy review');
   await app.close();
 });
+
+test('meeting notes over HTTP and through AI: AI drafts, only a person finalizes', async () => {
+  const app = await setUp();
+  const o = app.owner;
+  const sarah = app.client(); await sarah.signIn('sarah');
+  const cole = app.client(); await cole.signIn('cole');
+  const e = (await o.call('POST', '/events', { title: 'Kickoff', type: 'client_meeting', startsAt: '2026-10-12T14:00:00Z', attendees: [4] })).data;
+  const n = await sarah.call('POST', '/meeting-notes', { eventId: e.id, discussion: 'Talked pricing' });
+  assert.equal(n.status, 200, JSON.stringify(n.data));
+  assert.equal((await o.call('GET', `/events/${e.id}`)).data.meetingNoteId, n.data.id);
+  assert.equal((await sarah.call('PATCH', `/meeting-notes/${n.data.id}`, { status: 'final' })).status, 403);
+  assert.equal((await cole.call('GET', `/meeting-notes/${n.data.id}`)).status, 404);
+  assert.equal((await o.call('GET', '/meeting-notes?q=kick')).data.length, 1);
+  assert.equal((await sarah.call('DELETE', `/meeting-notes/${n.data.id}`)).status, 403);
+  const key = (await o.call('POST', '/api-keys', { name: 'notes', access: 'direct' })).data;
+  const ai = mcp(app, key.token);
+  const made = await ai.tool('create_meeting_note', { title: 'AI notes', meetingDate: '2026-10-13', summary: 'Drafted by AI' });
+  assert.equal(made.data.status, 'applied');
+  const id = made.data.results[0].id;
+  assert.equal((await ai.tool('get_meeting_note', { id })).data.status, 'draft');
+  const fin = await ai.tool('update_meeting_note', { id, status: 'final' });
+  assert.equal(fin.isError, true);
+  assert.match(String(fin.data), /cannot finalize/i);
+  assert.equal((await ai.tool('list_meeting_notes', {})).data.length, 2);
+  assert.equal((await o.call('PATCH', `/meeting-notes/${id}`, { status: 'final' })).data.status, 'final');
+  assert.equal((await o.call('DELETE', `/meeting-notes/${id}`)).status, 200);
+  await app.close();
+});

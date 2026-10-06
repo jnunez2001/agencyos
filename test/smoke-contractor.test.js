@@ -9,7 +9,7 @@ test('a Contractor sees only Dashboard and Tasks, and other addresses fall back 
   await import('../public/js/app.js');
   await app.wait(250);
   const { document } = app;
-  assert.deepEqual([...document.querySelectorAll('.sidebar .nav-link')].map((a) => a.textContent.trim()), ['Dashboard', 'Calendar', 'Tasks', 'AI agent']);
+  assert.deepEqual([...document.querySelectorAll('.sidebar .nav-link')].map((a) => a.textContent.trim()), ['Dashboard', 'Calendar', 'Meetings', 'Tasks', 'AI agent']);
   assert.match(app.main().textContent, /My work/);
   assert.doesNotMatch(app.main().textContent, /Active clients|Workload/);
   await app.go('#/tasks');

@@ -10,6 +10,7 @@ const clients = require('./clients');
 const projects = require('./projects');
 const tasks = require('./tasks');
 const events = require('./events');
+const meetingnotes = require('./meetingnotes');
 const sops = require('./sops');
 const goals = require('./goals');
 const results = require('./results');
@@ -19,6 +20,8 @@ const MAX_STEPS = 50;
 const REF_KEYS = ['clientId', 'projectId', 'taskId', 'sopId', 'goalId', 'id'];
 const NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;
 
+// Finalizing or reopening a note is a person's decision.
+const noStatus = (a) => { if (a.status !== undefined) fail(403, 'AI cannot finalize or reopen meeting notes. A manager does that'); return a; };
 const withId = (args, fn) => { const { id, ...rest } = args; return fn(id, rest); };
 
 // Everything an AI can do. Nothing here touches members, roles, passwords, keys or settings, and nothing deletes.
@@ -32,6 +35,8 @@ const ACTIONS = {
   update_task: (db, ctx, a) => withId(a, (id, rest) => tasks.updateTask(db, ctx, id, rest)),
   create_event: (db, ctx, a) => events.createEvent(db, ctx, a),
   update_event: (db, ctx, a) => withId(a, (id, rest) => events.updateEvent(db, ctx, id, rest)),
+  create_meeting_note: (db, ctx, a) => meetingnotes.createNote(db, ctx, noStatus(a)),
+  update_meeting_note: (db, ctx, a) => withId(noStatus(a), (id, rest) => meetingnotes.updateNote(db, ctx, id, rest)),
   add_comment: (db, ctx, a) => { const { taskId, ...rest } = a; return tasks.addComment(db, ctx, taskId, rest); },
   record_result: (db, ctx, a) => { const { clientId, ...rest } = a; const r = results.recordResult(db, ctx, clientId, rest); return { id: r.id, name: `${r.metric}: ${r.value}` }; },
   create_report: (db, ctx, a) => reports.createReport(db, ctx, a),
@@ -135,6 +140,8 @@ function describe(db, organizationId, steps) {
       case 'update_task': line = `Change task ${nameOf('tasks', 'title', a.id)}: ${changed}`; break;
       case 'create_event': line = `Schedule ${a.type ? String(a.type).replace(/_/g, ' ') : 'event'} "${a.title}" at ${a.startsAt}`; break;
       case 'update_event': line = `Change event ${nameOf('events', 'title', a.id)}: ${changed}`; break;
+      case 'create_meeting_note': line = `Write meeting notes "${a.title || nameOf('events', 'title', a.eventId)}"`; break;
+      case 'update_meeting_note': line = `Change meeting notes ${nameOf('meeting_notes', 'title', a.id)}: ${changed}`; break;
       case 'record_result': line = `Record ${a.metric} = ${a.value}${a.unit ? ` ${a.unit}` : ''} for ${nameOf('clients', 'name', a.clientId)}${a.recordedOn ? ` (${a.recordedOn})` : ''}`; break;
       case 'create_report': line = `Create report "${a.title}" for ${nameOf('clients', 'name', a.clientId)}`; break;
       case 'update_report': line = `Change report ${nameOf('reports', 'title', a.id)}: ${changed}`; break;

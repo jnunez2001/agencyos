@@ -12,6 +12,7 @@ const dashboard = require('../services/dashboard');
 const clients = require('../services/clients');
 const projects = require('../services/projects');
 const events = require('../services/events');
+const meetingnotes = require('../services/meetingnotes');
 const tasks = require('../services/tasks');
 const apikeys = require('../services/apikeys');
 const aiplans = require('../services/aiplans');
@@ -159,6 +160,12 @@ module.exports = function apiRouter(db, { google = null } = {}) {
   r.get('/events/:id', (req, res) => res.json(events.getEvent(db, ctxOf(req), idParam(req))));
   r.patch('/events/:id', (req, res) => res.json(events.updateEvent(db, ctxOf(req), idParam(req), req.body)));
   r.delete('/events/:id', (req, res) => res.json(events.deleteEvent(db, ctxOf(req), idParam(req))));
+  // ---- meeting notes ----
+  r.get('/meeting-notes', (req, res) => res.json(meetingnotes.listNotes(db, ctxOf(req), req.query)));
+  r.post('/meeting-notes', (req, res) => res.json(meetingnotes.createNote(db, ctxOf(req), req.body)));
+  r.get('/meeting-notes/:id', (req, res) => res.json(meetingnotes.getNote(db, ctxOf(req), idParam(req))));
+  r.patch('/meeting-notes/:id', (req, res) => res.json(meetingnotes.updateNote(db, ctxOf(req), idParam(req), req.body)));
+  r.delete('/meeting-notes/:id', (req, res) => res.json(meetingnotes.deleteNote(db, ctxOf(req), idParam(req))));
   r.get('/projects/:id', (req, res) => res.json(projects.getProject(db, ctxOf(req), idParam(req))));
   r.patch('/projects/:id', (req, res) => res.json(projects.updateProject(db, ctxOf(req), idParam(req), req.body)));
 

@@ -1,0 +1,78 @@
+// Joshua Nunez
+// Meeting notes: the list, a note page, and the write form. A note may belong to a calendar event.
+import { h, icon, openSheet, goAfterSheets } from '../dom.js';
+import { api } from '../api.js';
+import { field, selectField, textareaField, sheetForm, confirmButton, pill, formatDay } from '../ui.js';
+
+const STATUS_LABEL = { draft: 'Draft', final: 'Final' };
+const SECTION_LABEL = [['summary', 'Summary'], ['agenda', 'Agenda'], ['discussion', 'Discussion'], ['decisions', 'Decisions'], ['requests', 'Requests'], ['followUps', 'Follow-ups']];
+const statusPill = (s) => pill('ns', s, STATUS_LABEL[s] || s);
+const filters = { status: '', clientId: '', q: '' };
+
+// Write a new note (for an event, or on its own) or change one. `onSaved` gets the saved note.
+export async function openNoteForm(session, { note, event } = {}, onSaved) {
+  const manage = session.can['notes.manage'];
+  const clients = session.can['clients.view'] && !event ? await api('GET', '/clients') : [];
+  openSheet(note ? 'Edit meeting notes' : 'New meeting notes', (close) => {
+    const base = note || {};
+    const title = field('Title', { name: 'title', maxlength: 200, required: true, value: base.title || (event ? event.title : '') });
+    const dayOfEvent = event ? (event.allDay ? event.startsAt : (() => { const d = new Date(event.startsAt); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })()) : '';
+    const date = field('Date', { name: 'meetingDate', type: 'date', required: true, value: base.meetingDate || dayOfEvent || new Date().toISOString().slice(0, 10) });
+    const client = !event && !note?.eventId && clients.length ? selectField('Client', [['', 'No client'], ...clients.map((c) => [c.id, c.name])], base.clientId || '', { name: 'clientId' }) : null;
+    const sections = SECTION_LABEL.map(([key, label]) => textareaField(label, { name: key, maxlength: 20000, rows: key === 'discussion' ? 6 : 3 }, base[key] || ''));
+    const status = note && manage ? selectField('Status', Object.entries(STATUS_LABEL), note.status, { name: 'status' }) : null;
+    return sheetForm([title, date, client, ...sections, status], note ? 'Save' : 'Add notes', async () => {
+      const body = { title: title.input.value, meetingDate: date.input.value };
+      for (const [i, [key]] of SECTION_LABEL.entries()) body[key] = sections[i].input.value;
+      if (client) body.clientId = client.input.value === '' ? null : Number(client.input.value);
+      if (status) body.status = status.input.value;
+      if (event) body.eventId = event.id;
+      const saved = note ? await api('PATCH', `/meeting-notes/${note.id}`, body) : await api('POST', '/meeting-notes', body);
+      await onSaved(saved);
+    }, close);
+  });
+}
+
+async function notePage(session, id, rerender) {
+  const n = await api('GET', `/meeting-notes/${id}`);
+  const link = (href, text) => (session.can['projects.view'] ? h('a', { class: 'link', href }, text) : text);
+  const facts = h('dl', { class: 'facts' },
+    h('dt', {}, 'Date'), h('dd', {}, formatDay(n.meetingDate)),
+    n.clientName && h('dt', {}, 'Client'), n.clientName && h('dd', {}, session.can['clients.view'] ? h('a', { class: 'link', href: `#/clients/${n.clientId}` }, n.clientName) : n.clientName),
+    n.projectName && h('dt', {}, 'Project'), n.projectName && h('dd', {}, link(`#/projects/${n.projectId}`, n.projectName)),
+    n.eventId && h('dt', {}, 'Event'), n.eventId && h('dd', {}, h('a', { class: 'link', href: '#/calendar' }, 'On the calendar')),
+    h('dt', {}, 'Written by'), h('dd', {}, n.createdByName || 'Unknown'),
+    n.status === 'final' && h('dt', {}, 'Finalized'), n.status === 'final' && h('dd', {}, n.finalizedByName || ''));
+  const sections = SECTION_LABEL.filter(([key]) => n[key]).map(([key, label]) => h('section', { class: 'panel' }, h('div', { class: 'panel-head' }, h('h2', {}, label)), h('p', { class: 'prose' }, n[key])));
+  const act = (fn) => async () => { try { await fn(); await rerender(); } catch (e) { alert(e.message); } };
+  return h('div', { class: 'page' },
+    h('a', { class: 'back', href: '#/meetings' }, icon('back'), 'Meetings'),
+    h('div', { class: 'page-head' }, h('div', {}, h('h1', { class: 'page-title' }, n.title), h('div', { class: 'head-meta' }, statusPill(n.status))),
+      h('div', { class: 'head-actions' },
+        n.canEdit && h('button', { class: 'btn', type: 'button', onclick: () => openNoteForm(session, { note: n }, rerender).catch((e) => alert(e.message)) }, 'Edit'),
+        n.canFinalize && n.status === 'draft' && h('button', { class: 'btn btn-primary', type: 'button', onclick: act(() => api('PATCH', `/meeting-notes/${n.id}`, { status: 'final' })) }, 'Mark final'),
+        n.canFinalize && n.status === 'final' && h('button', { class: 'btn', type: 'button', onclick: act(() => api('PATCH', `/meeting-notes/${n.id}`, { status: 'draft' })) }, 'Reopen'),
+        n.canDelete && confirmButton('Delete', 'Confirm delete', async () => { try { await api('DELETE', `/meeting-notes/${n.id}`); goAfterSheets('#/meetings'); } catch (e) { alert(e.message); } }))),
+    h('section', { class: 'panel' }, facts),
+    sections.length ? sections : h('p', { class: 'muted pad' }, 'Nothing written yet.'));
+}
+
+export async function meetingsView(session, { param, rerender }) {
+  if (param) return notePage(session, param, rerender);
+  const clients = session.can['clients.view'] ? await api('GET', '/clients') : [];
+  const query = new URLSearchParams();
+  for (const [k, v] of Object.entries(filters)) if (v) query.set(k, v);
+  const list = await api('GET', `/meeting-notes${query.size ? `?${query}` : ''}`);
+  const statusChips = h('div', { class: 'chips', role: 'group', 'aria-label': 'Status' }, [['', 'All'], ['draft', 'Draft'], ['final', 'Final']].map(([v, l]) => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(filters.status === v), onclick: () => { filters.status = v; rerender(); } }, l)));
+  const search = h('input', { class: 'input', type: 'search', placeholder: 'Search notes', 'aria-label': 'Search notes', value: filters.q });
+  search.addEventListener('change', () => { filters.q = search.value.trim(); rerender(); });
+  const clientPick = clients.length ? h('select', { class: 'input', 'aria-label': 'Client', onchange: (e) => { filters.clientId = e.target.value; rerender(); } }, [h('option', { value: '' }, 'All clients'), ...clients.map((c) => h('option', { value: c.id, selected: String(c.id) === String(filters.clientId) }, c.name))]) : null;
+  return h('div', { class: 'page' },
+    h('div', { class: 'page-head' }, h('div', {}, h('h1', { class: 'page-title' }, 'Meetings')),
+      session.can['notes.manage'] && h('div', { class: 'head-actions' }, h('button', { class: 'btn btn-primary', type: 'button', onclick: () => openNoteForm(session, {}, (n) => goAfterSheets(`#/meetings/${n.id}`)).catch((e) => alert(e.message)) }, icon('plus'), 'New notes'))),
+    statusChips,
+    h('div', { class: 'filters' }, search, clientPick),
+    h('section', { class: 'panel list' }, list.length ? list.map((n) => h('a', { class: 'row', href: `#/meetings/${n.id}` },
+      h('div', { class: 'grow' }, h('div', { class: 'row-title' }, n.title), h('div', { class: 'row-sub' }, [formatDay(n.meetingDate), n.clientName].filter(Boolean).join(', '))),
+      statusPill(n.status), icon('chevron'))) : h('p', { class: 'muted pad' }, 'No meeting notes yet. Open an event on the calendar and choose Add meeting notes.')));
+}

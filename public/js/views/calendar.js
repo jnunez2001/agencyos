@@ -1,8 +1,9 @@
 // Joshua Nunez
 // The calendar: Day, Week, Month and Agenda, for me, the team or one client. Times are shown in this browser's time zone;
 // the server keeps them in UTC. Task and project due dates appear as read-only deadlines.
-import { h, icon, openSheet } from '../dom.js';
+import { h, icon, openSheet, goAfterSheets } from '../dom.js';
 import { api } from '../api.js';
+import { openNoteForm } from './meetings.js';
 import { field, selectField, textareaField, sheetForm, confirmButton, formatDay } from '../ui.js';
 
 export const EVENT_TYPE_LABEL = { client_meeting: 'Client meeting', internal_meeting: 'Internal meeting', team_meeting: 'Team meeting', deadline: 'Deadline', follow_up: 'Follow-up', review: 'Review', sop_review: 'SOP review', training: 'Training', blocked_time: 'Blocked time' };
@@ -167,11 +168,14 @@ function openEventDetails(session, event, onChanged) {
       event.projectName && h('dt', {}, 'Project'), event.projectName && h('dd', {}, link(`#/projects/${event.projectId}`, event.projectName)),
       event.taskTitle && h('dt', {}, 'Task'), event.taskTitle && h('dd', {}, link(`#/projects/${event.projectId}`, event.taskTitle)),
       event.attendees.length > 0 && h('dt', {}, 'People'), event.attendees.length > 0 && h('dd', {}, event.attendees.map((a) => a.displayName).join(', ')));
+    const noteButton = session.can['notes.view'] && (event.meetingNoteId
+      ? h('a', { class: 'btn', href: `#/meetings/${event.meetingNoteId}`, onclick: () => close() }, 'Open meeting notes')
+      : (session.can['notes.manage'] || event.attendees.some((a) => a.id === session.user.id) || event.createdBy === session.user.id) && h('button', { class: 'btn', type: 'button', onclick: () => { close(); openNoteForm(session, { event }, (n) => goAfterSheets(`#/meetings/${n.id}`)).catch((e) => alert(e.message)); } }, 'Add meeting notes'));
     const actions = event.canEdit ? h('div', { class: 'sheet-actions' },
       confirmButton('Delete', 'Confirm delete', async () => { try { await api('DELETE', `/events/${event.id}`); close(); await onChanged(); } catch (e) { alert(e.message); } }),
       event.status === 'scheduled' && session.can['events.manage'] && h('button', { class: 'btn', type: 'button', onclick: async () => { try { await api('PATCH', `/events/${event.id}`, { status: 'completed' }); close(); await onChanged(); } catch (e) { alert(e.message); } } }, 'Mark done'),
       h('button', { class: 'btn btn-primary', type: 'button', onclick: () => { close(); openEventForm(session, { event }, onChanged).catch((e) => alert(e.message)); } }, 'Edit')) : null;
-    return h('div', { class: 'sheet-body' }, facts, event.notes && h('p', { class: 'prose' }, event.notes), actions);
+    return h('div', { class: 'sheet-body' }, facts, event.notes && h('p', { class: 'prose' }, event.notes), noteButton && h('div', { class: 'sheet-actions' }, noteButton), actions);
   });
 }
 

@@ -54,6 +54,9 @@ const ACTIONS = {
   'events.view': ALL,
   'events.manage': MANAGERS,
   'events.own': ALL,
+  // Meeting notes. Everyone may be shown the ones they can see and write the ones they attend; Managers finalize.
+  'notes.view': ALL,
+  'notes.manage': MANAGERS,
   'ai.use': ALL,
   'ai.manage': OWNER_ADMIN,
   'ai.approve': OWNER_ADMIN,

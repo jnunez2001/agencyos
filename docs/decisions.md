@@ -111,3 +111,8 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 - Task and project due dates are shown as read-only deadlines, never copied into events.
 - Employees and Contractors may block their own time only. Managers and above run the rest. AI can read, schedule and change events through plans (ask first by default) and can never delete.
 - Roadmap order after this: meeting notes, requests, decisions, follow-ups, role workspaces, time tracking, capacity, retainers, SOP change requests, notifications, AI meeting intelligence.
+
+## 2026-10-06: Meeting notes (roadmap step 2)
+
+- Structured notes (summary, agenda, discussion, decisions, requests, follow-ups) kept as plain text sections; steps 3 to 6 will turn decisions, requests and follow-ups into real records. Spec: `docs/specs/2026-10-06-phase-10-meeting-notes.md`.
+- One note per event, linked both ways. Attendees write a draft; only a manager finalizes, reopens or deletes. AI can draft and edit drafts but never finalizes.
