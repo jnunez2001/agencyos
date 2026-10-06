@@ -6,9 +6,9 @@ const { createApp } = require('../../server/app');
 const PASSWORD = 'correct horse battery';
 
 // A running app on a free port, with a tiny client that keeps the session cookie and the CSRF token.
-async function boot() {
+async function boot(options = {}) {
   const db = openDb(':memory:');
-  const server = await new Promise((resolve) => { const s = createApp(db).listen(0, '127.0.0.1', () => resolve(s)); });
+  const server = await new Promise((resolve) => { const s = createApp(db, options).listen(0, '127.0.0.1', () => resolve(s)); });
   const base = `http://127.0.0.1:${server.address().port}/api`;
   const client = () => {
     let cookie = '';
@@ -28,8 +28,8 @@ async function boot() {
   return { db, base, client, close: () => new Promise((r) => server.close(r)) };
 }
 
-async function setUp() {
-  const app = await boot();
+async function setUp(options = {}) {
+  const app = await boot(options);
   const owner = app.client();
   assert.equal((await owner.call('POST', '/setup', { organizationName: 'Whalls Agency', displayName: 'Josh', username: 'josh', password: PASSWORD })).status, 200);
   await owner.signIn('josh');

@@ -17,6 +17,8 @@ Environment=COOKIE_SECURE=1
 # Where people reach it. The OAuth discovery documents use this address.
 Environment=PUBLIC_URL=https://agency.joshnunezseo.com
 Environment=SESSION_DAYS=14
+# The Google service account key (a root-owned file, group-readable by this service). Absent means Google is not set up.
+Environment=GOOGLE_KEY_FILE=/etc/agencyos-google.json
 # The setup code (SETUP_TOKEN) lives here, readable by root only. Created by deploy/set-setup-token.sh.
 EnvironmentFile=-/etc/agencyos.env
 ExecStart=/usr/bin/env node server/index.js

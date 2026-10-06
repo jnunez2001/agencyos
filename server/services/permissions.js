@@ -29,6 +29,8 @@ const ACTIONS = {
   // Change the status of a task assigned to you, and comment on a task you can see.
   'tasks.work': ALL,
   'dashboard.agency': NOT_CONTRACTOR,
+  // Connecting a client's Google Search Console and Analytics. Managers and above.
+  'integrations.manage': MANAGERS,
   // Results are recorded by staff. Reports are written and approved by managers; staff read them.
   'results.view': NOT_CONTRACTOR,
   'results.record': NOT_CONTRACTOR,

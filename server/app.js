@@ -7,7 +7,8 @@ const apiRouter = require('./routes/api');
 const { mcpHandler } = require('./mcp');
 const { oauthRouter } = require('./oauthRoutes');
 
-function createApp(db) {
+// `google` is the Google client (or null when no key file is installed). Tests pass a fake.
+function createApp(db, { google = null } = {}) {
   const app = express();
   app.disable('x-powered-by');
   // Only a proxy on this machine (such as a tunnel) is trusted to set X-Forwarded-*.
@@ -24,7 +25,7 @@ function createApp(db) {
     next();
   });
   app.use('/api', mw.sessionLoader(db));
-  app.use('/api', apiRouter(db));
+  app.use('/api', apiRouter(db, { google }));
   app.use('/api', mw.errorHandler);
 
   // "no-store": a proxy such as Cloudflare rewrites "no-cache" into hours of browser caching, which hides updates.

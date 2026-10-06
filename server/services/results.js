@@ -12,7 +12,7 @@ const logCtx = (ctx) => ({ organizationId: ctx.organizationId, actorUserId: ctx.
 const need = (ctx, action) => { if (!perms.can(ctx.actor.role, action)) throw new ServiceError(403, 'Not allowed'); };
 
 const SELECT = `
-  SELECT r.id, r.client_id AS clientId, r.metric, r.value, r.unit, r.recorded_on AS recordedOn, r.goal_id AS goalId, g.title AS goalTitle, r.note,
+  SELECT r.id, r.client_id AS clientId, r.metric, r.value, r.unit, r.recorded_on AS recordedOn, r.goal_id AS goalId, g.title AS goalTitle, r.note, r.source,
          r.created_by AS recordedById, u.display_name AS recordedByName, r.created_at AS createdAt
     FROM client_results r
     LEFT JOIN client_goals g ON g.id = r.goal_id
@@ -106,6 +106,7 @@ function recordResult(db, ctx, clientId, input = {}) {
 
 // Someone may change or remove their own entries. A Manager or above may change anyone's.
 function mayChange(ctx, row) {
+  if (row.source !== 'manual') throw new ServiceError(400, 'This result comes from Google and is updated automatically');
   if (!perms.can(ctx.actor.role, 'reports.manage') && row.recordedById !== ctx.actor.id) throw new ServiceError(403, 'Not allowed');
 }
 

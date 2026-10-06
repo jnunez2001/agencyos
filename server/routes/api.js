@@ -21,6 +21,7 @@ const services = require('../services/services');
 const goals = require('../services/goals');
 const results = require('../services/results');
 const reports = require('../services/reports');
+const googlesync = require('../services/googlesync');
 const { ServiceError } = require('../services/errors');
 
 function idParam(req) {
@@ -29,7 +30,7 @@ function idParam(req) {
   return id;
 }
 
-module.exports = function apiRouter(db) {
+module.exports = function apiRouter(db, { google = null } = {}) {
   const r = express.Router();
   const ctxOf = (req) => ({ organizationId: req.auth.organization.id, actor: { id: req.auth.user.id, role: req.auth.role }, ip: req.ip, source: 'web' });
   const sessionBody = (a) => ({
@@ -105,6 +106,12 @@ module.exports = function apiRouter(db) {
   r.get('/tasks/:id/comments', (req, res) => res.json(tasks.listComments(db, ctxOf(req), idParam(req))));
   r.post('/tasks/:id/comments', (req, res) => res.json(tasks.addComment(db, ctxOf(req), idParam(req), req.body)));
 
+  r.get('/integrations/google', (req, res) => res.json(googlesync.status(db, ctxOf(req), google)));
+  r.get('/integrations/google/available', mw.wrap(async (req, res) => res.json(await googlesync.available(db, ctxOf(req), google))));
+  r.get('/clients/:id/google', (req, res) => res.json(googlesync.getLink(db, ctxOf(req), idParam(req))));
+  r.put('/clients/:id/google', mw.wrap(async (req, res) => res.json(await googlesync.connect(db, ctxOf(req), google, idParam(req), req.body))));
+  r.post('/clients/:id/google/sync', mw.wrap(async (req, res) => res.json(await googlesync.sync(db, ctxOf(req), google, idParam(req), { months: req.body && req.body.months }))));
+  r.delete('/clients/:id/google', (req, res) => res.json(googlesync.disconnect(db, ctxOf(req), idParam(req))));
   r.get('/clients/:id/results', (req, res) => res.json(results.listResults(db, ctxOf(req), idParam(req), { metric: req.query.metric, from: req.query.from, to: req.query.to })));
   r.get('/clients/:id/metrics', (req, res) => res.json(results.metricsSummary(db, ctxOf(req), idParam(req))));
   r.post('/clients/:id/results', (req, res) => res.json(results.recordResult(db, ctxOf(req), idParam(req), req.body)));
