@@ -2,6 +2,7 @@
 /* AgencyOS: clean and minimal. Ink and white, one calm indigo accent, light and dark. */
 
 :root {
+  color-scheme: light;
   --bg: #f7f7f8;
   --card: #ffffff;
   --ink: #14161b;
@@ -20,6 +21,7 @@
   --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 4px 16px rgba(16, 24, 40, 0.04);
 }
 :root[data-theme="dark"] {
+  color-scheme: dark;
   --bg: #0c0e13;
   --card: #14171e;
   --ink: #f1f2f5;
@@ -274,3 +276,23 @@ a.row:hover { background: var(--hover); }
 :root[data-theme="dark"] .pill.acc-direct, :root[data-theme="dark"] .pill.pp-failed { background: #3b1414; color: #fca5a5; }
 .url-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .code.url { flex: 1; min-width: 0; margin: 0; word-break: break-all; font-size: 14px; }
+
+/* ---------- SOPs and QA ---------- */
+.column-head strong { font-size: 14px; }
+@media (min-width: 1200px) { .board { grid-template-columns: repeat(5, minmax(0, 1fr)); } }
+.pill.st-changes { background: #fee2e2; color: #b91c1c; }
+:root[data-theme="dark"] .pill.st-changes { background: #3b1414; color: #fca5a5; }
+.pill.sp-approved { background: #dcfce7; color: #166534; }
+.pill.sp-testing { background: #fef3c7; color: #92400e; }
+.pill.sp-deprecated { background: var(--hover); color: var(--muted); }
+:root[data-theme="dark"] .pill.sp-approved { background: #10321d; color: #86efac; }
+:root[data-theme="dark"] .pill.sp-testing { background: #3a2a0c; color: #fcd34d; }
+.sop-block, .qa-block { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; }
+.sop-block details { margin-top: 2px; }
+.sop-block summary { cursor: pointer; font-weight: 600; color: var(--accent); }
+.mini-title { margin: 10px 0 4px; font-size: 12px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); }
+.sop-section { display: flex; flex-direction: column; gap: 6px; }
+.sop-section + .sop-section { margin-top: 12px; }
+.sheet-actions.left { justify-content: flex-start; flex-wrap: wrap; }
+.sheet-actions.left:empty { display: none; }
+.checks { display: flex; flex-direction: column; gap: 4px; }

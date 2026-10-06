@@ -11,7 +11,7 @@ test('the Owner can open every screen and sheet without an error or stray text',
   const { document } = app;
 
   const nav = [...document.querySelectorAll('.sidebar .nav-link')].map((a) => a.textContent.trim());
-  assert.deepEqual(nav, ['Dashboard', 'Tasks', 'Projects', 'Clients', 'Team', 'AI agent', 'Activity', 'Settings']);
+  assert.deepEqual(nav, ['Dashboard', 'Tasks', 'QA', 'Projects', 'Clients', 'SOPs', 'Team', 'AI agent', 'Activity', 'Settings']);
 
   for (const [hash, title] of [['#/dashboard', 'Good'], ['#/team', 'Team'], ['#/activity', 'Activity'], ['#/settings', 'Settings'], ['#/profile', 'My profile']]) {
     await app.go(hash);

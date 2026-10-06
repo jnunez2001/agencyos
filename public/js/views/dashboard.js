@@ -38,7 +38,10 @@ export async function dashboardView(session, { rerender }) {
   const inbox = d.aiPending > 0 && h('section', { class: 'panel' },
     h('div', { class: 'panel-head' }, h('h2', {}, 'AI inbox'), h('a', { class: 'link', href: '#/ai' }, 'Review')),
     h('p', {}, `${d.aiPending} ${d.aiPending === 1 ? 'plan is' : 'plans are'} waiting for your approval.`));
+  const qa = d.qaWaiting > 0 && h('section', { class: 'panel' },
+    h('div', { class: 'panel-head' }, h('h2', {}, 'QA'), h('a', { class: 'link', href: '#/qa' }, 'Review')),
+    h('p', {}, `${d.qaWaiting} ${d.qaWaiting === 1 ? 'task is' : 'tasks are'} waiting for review.`));
   return h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('div', {}, h('p', { class: 'eyebrow' }, d.organization.name), h('h1', { class: 'page-title' }, greeting(d.organization.timezone, d.me.displayName)))),
-    h('div', { class: 'dash' }, h('div', { class: 'stack' }, inbox, mine, workload), h('div', { class: 'stack' }, agency, team)));
+    h('div', { class: 'dash' }, h('div', { class: 'stack' }, qa, inbox, mine, workload), h('div', { class: 'stack' }, agency, team)));
 }

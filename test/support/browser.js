@@ -8,11 +8,11 @@ const { JSDOM } = require('jsdom');
 const PUBLIC = path.resolve(__dirname, '..', '..', 'public');
 
 const ROLES = ['owner', 'admin', 'manager', 'employee', 'contractor'];
-const WORK = { 'clients.view': 1, 'clients.manage': 1, 'projects.view': 1, 'projects.manage': 1, 'tasks.view': 1, 'tasks.manage': 1, 'tasks.work': 1, 'dashboard.agency': 1 };
+const WORK = { 'sops.view': 1, 'sops.manage': 1, 'qa.review': 1, 'clients.view': 1, 'clients.manage': 1, 'projects.view': 1, 'projects.manage': 1, 'tasks.view': 1, 'tasks.manage': 1, 'tasks.work': 1, 'dashboard.agency': 1 };
 const CAN = {
   owner: { 'org.view': 1, 'org.update': 1, 'members.list': 1, 'members.create': 1, 'members.manage': 1, 'profile.edit_others': 1, 'profile.edit_self': 1, 'activity.view': 1, 'dashboard.team': 1, 'ai.use': 1, 'ai.manage': 1, 'ai.approve': 1, ...WORK },
   manager: { 'ai.use': 1, 'org.view': 1, 'members.list': 1, 'profile.edit_self': 1, 'dashboard.team': 1, ...WORK },
-  employee: { 'ai.use': 1, 'org.view': 1, 'members.list': 1, 'profile.edit_self': 1, 'clients.view': 1, 'projects.view': 1, 'tasks.view': 1, 'tasks.work': 1, 'dashboard.agency': 1 },
+  employee: { 'sops.view': 1, 'ai.use': 1, 'org.view': 1, 'members.list': 1, 'profile.edit_self': 1, 'clients.view': 1, 'projects.view': 1, 'tasks.view': 1, 'tasks.work': 1, 'dashboard.agency': 1 },
   contractor: { 'ai.use': 1, 'org.view': 1, 'profile.edit_self': 1, 'tasks.view': 1, 'tasks.work': 1 },
 };
 CAN.admin = CAN.owner;
@@ -27,7 +27,14 @@ const NOW = new Date().toISOString();
 const clientRow = (id, name, status, openProjects) => ({ id, name, status, website: id === 1 ? 'https://acme.example' : '', industry: id === 1 ? 'Dental' : '', notes: id === 1 ? 'Prefers email' : '', openProjects, createdAt: NOW, updatedAt: NOW });
 const CLIENTS = [clientRow(1, 'Acme Dental', 'active', 1), clientRow(2, 'Beta Bakery', 'paused', 0)];
 const PROJECTS = [{ id: 1, clientId: 1, clientName: 'Acme Dental', name: 'New website', description: 'Rebuild the site', status: 'active', startDate: '2026-10-01', dueDate: '2030-01-31', managerId: 3, managerName: 'Mark Cruz', openTasks: 2, doneTasks: 1 }];
-const taskRow = (id, title, status, extra = {}) => ({ id, projectId: 1, projectName: 'New website', clientId: 1, clientName: 'Acme Dental', title, description: '', status, priority: 'normal', assigneeId: null, assigneeName: null, dueDate: null, estimateHours: null, completedAt: null, isOverdue: false, createdAt: NOW, updatedAt: NOW, ...extra });
+const SOP_CONTENT = { purpose: 'Rank the page', whenToUse: '', inputs: 'URL and keyword', steps: ['Research', 'Write'], checklist: ['Title ok', 'Links ok'], expectedOutput: 'An updated page', commonMistakes: '', examples: '' };
+const PENDING = { id: 5, status: 'pending', submittedByName: 'Rayne', submittedAt: NOW, reviewerName: null, reviewedAt: null, comments: '', checklist: [{ text: 'Title ok', checked: false }, { text: 'Links ok', checked: false }] };
+const PAST = { id: 4, status: 'changes_requested', submittedByName: 'Rayne', submittedAt: '2026-10-01T08:00:00.000Z', reviewerName: 'Mark Cruz', reviewedAt: '2026-10-02T08:00:00.000Z', comments: 'Title was too long', checklist: [{ text: 'Title ok', checked: false }, { text: 'Links ok', checked: true }] };
+const SOP_LIST = [
+  { id: 1, title: 'Page Optimization', service: 'SEO', ownerId: 1, ownerName: 'Josh Nunez', status: 'approved', requiresQa: true, version: '1.1', versionId: 2, createdAt: NOW, updatedAt: NOW },
+  { id: 2, title: 'Draft idea', service: '', ownerId: 3, ownerName: 'Mark Cruz', status: 'draft', requiresQa: false, version: '1.0', versionId: 3, createdAt: NOW, updatedAt: NOW },
+];
+const taskRow = (id, title, status, extra = {}) => ({ id, sopId: null, sopTitle: null, sopVersion: null, qaRequired: false, projectId: 1, projectName: 'New website', clientId: 1, clientName: 'Acme Dental', title, description: '', status, priority: 'normal', assigneeId: null, assigneeName: null, dueDate: null, estimateHours: null, completedAt: null, isOverdue: false, createdAt: NOW, updatedAt: NOW, ...extra });
 const RANK = { owner: 5, admin: 4, manager: 3, employee: 2, contractor: 1 };
 
 function answers(role, { mustChange = false, empty = false } = {}) {
@@ -42,11 +49,20 @@ function answers(role, { mustChange = false, empty = false } = {}) {
     if (pathname === '/org') return { id: 1, name: 'Whalls Agency', timezone: 'Asia/Manila' };
     const mineOnly = role === 'contractor';
     const taskList = [
-      taskRow(1, 'Homepage copy', 'in_progress', { description: 'Draft the copy', priority: 'high', assigneeId: me.id, assigneeName: me.displayName, dueDate: '2020-01-01', isOverdue: true, estimateHours: 4 }),
-      ...(mineOnly ? [] : [taskRow(2, 'Logo options', 'todo'), taskRow(3, 'Sitemap', 'done', { assigneeId: 2, assigneeName: 'Rayne', completedAt: NOW })]),
+      taskRow(1, 'Homepage copy', 'in_progress', { description: 'Draft the copy', priority: 'high', assigneeId: me.id, assigneeName: me.displayName, dueDate: '2020-01-01', isOverdue: true, estimateHours: 4, sopId: 1, sopTitle: 'Page Optimization', sopVersion: '1.0', qaRequired: true }),
+      ...(mineOnly ? [] : [taskRow(2, 'Logo options', 'review', { assigneeId: 2, assigneeName: 'Rayne', sopId: 1, sopTitle: 'Page Optimization', sopVersion: '1.0', qaRequired: true }), taskRow(3, 'Sitemap', 'done', { assigneeId: 2, assigneeName: 'Rayne', completedAt: NOW })]),
     ].map((t) => ({ ...t, canEdit: !!can['tasks.manage'], canChangeStatus: !!can['tasks.manage'] || t.assigneeId === me.id }));
     if (pathname === '/tasks' && method === 'GET') return taskList;
-    if (/^\/tasks\/\d+$/.test(pathname) && method === 'GET') return taskList.find((t) => t.id === Number(pathname.split('/')[2])) || taskList[0];
+    if (/^\/tasks\/\d+$/.test(pathname) && method === 'GET') {
+      const t = taskList.find((x) => x.id === Number(pathname.split('/')[2])) || taskList[0];
+      const pinned = { id: 1, title: 'Page Optimization', status: 'approved', version: '1.0', latestVersion: '1.1', isLatest: false, content: SOP_CONTENT };
+      return { ...t, sop: t.sopId ? pinned : null, qa: { required: t.qaRequired, pending: t.id === 2 ? PENDING : null, history: t.id === 2 ? [PENDING, PAST] : [] } };
+    }
+    if (pathname === '/sops' && method === 'GET') { const want = new URLSearchParams(url.split('?')[1] || '').get('status'); return SOP_LIST.filter((x) => !want || x.status === want).filter((x) => can['sops.manage'] || x.status !== 'draft'); }
+    if (pathname === '/sops' && method === 'POST') return { ...SOP_LIST[1], id: 3, title: 'New one' };
+    if (pathname === '/sops/1' && method === 'GET') return { ...SOP_LIST[0], content: SOP_CONTENT, versions: [{ id: 2, label: '1.1', changeNote: 'Added a step', createdAt: NOW, createdByName: 'Mark Cruz' }, { id: 1, label: '1.0', changeNote: 'First version', createdAt: '2026-10-01T08:00:00.000Z', createdByName: 'Josh Nunez' }] };
+    if (pathname === '/sops/1/versions/1' && method === 'GET') return { id: 1, label: '1.0', changeNote: 'First version', createdAt: NOW, createdByName: 'Josh Nunez', content: { ...SOP_CONTENT, steps: ['Old step one', 'Old step two'] } };
+    if (pathname === '/qa' && method === 'GET') return can['qa.review'] ? [{ reviewId: 5, taskId: 2, title: 'Logo options', projectName: 'New website', clientName: 'Acme Dental', assigneeName: 'Rayne', submittedByName: 'Rayne', submittedAt: NOW, sopTitle: 'Page Optimization', sopVersion: '1.0', checklistTotal: 2 }] : { __status: 403, error: 'Not allowed' };
     if (/^\/tasks\/\d+\/comments$/.test(pathname) && method === 'GET') return [{ id: 1, taskId: 1, authorId: 2, authorName: 'Rayne', body: 'Please start with the services page', createdAt: NOW }];
     if (pathname === '/api-keys' && method === 'GET') return [{ id: 4, name: 'Claude', kind: 'oauth', access: 'propose', prefix: 'OAuth', userId: 1, ownerName: 'Josh Nunez', createdAt: NOW, lastUsedAt: NOW, revoked: false }, { id: 1, kind: 'key', name: 'Claude on my Mac', access: 'propose', prefix: 'aos_Ab12', userId: 1, ownerName: 'Josh Nunez', createdAt: NOW, lastUsedAt: NOW, revoked: false }, { id: 2, kind: 'key', name: 'Old key', access: 'direct', prefix: 'aos_Zz99', userId: 1, ownerName: 'Josh Nunez', createdAt: NOW, lastUsedAt: null, revoked: true }];
     if (pathname === '/api-keys' && method === 'POST') return { id: 3, name: 'New', access: 'propose', prefix: 'aos_Qq77', userId: 1, ownerName: 'Josh Nunez', createdAt: NOW, lastUsedAt: null, revoked: false, token: 'aos_Qq77SecretSecretSecretSecretSecret' };
@@ -66,6 +82,7 @@ function answers(role, { mustChange = false, empty = false } = {}) {
       agency: can['dashboard.agency'] ? { activeClients: 1, activeProjects: 1, openTasks: 2, overdueTasks: 1 } : null,
       workload: can['dashboard.team'] ? [{ id: 1, displayName: 'Josh Nunez', role: 'owner', capacityHours: 40, openTasks: 2, overdue: 1, openHours: 12 }, { id: 2, displayName: 'Rayne', role: 'admin', capacityHours: 0, openTasks: 0, overdue: 0, openHours: 0 }, { id: 3, displayName: 'Mark Cruz', role: 'manager', capacityHours: 20, openTasks: 3, overdue: 0, openHours: 30 }] : null,
       aiPending: can['ai.approve'] ? 1 : 0,
+      qaWaiting: can['qa.review'] ? 1 : 0,
       team: can['dashboard.team'] ? { total: 4, active: 3, byRole: { owner: 1, admin: 1, manager: 1, employee: 0, contractor: 0 }, mustChangePassword: 1 } : null };
     if (pathname === '/members') return empty ? [] : PEOPLE.map((p) => ({ ...p, canManage: can['members.manage'] && (role === 'owner' || RANK[role] > RANK[p.role]), ...(can['members.manage'] ? {} : { mustChangePassword: undefined }) }));
     if (/^\/members\/\d+\/profile$/.test(pathname) || pathname === '/profile') return pathname === '/profile' ? profile : { ...profile, userId: 3, username: 'mark', displayName: 'Mark Cruz' };

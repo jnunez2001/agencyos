@@ -33,7 +33,7 @@ test('the Owner can open every work screen and sheet without an error or stray t
   clean('task list');
   click(buttonWith(app.main(), 'Board'));
   await app.wait(150);
-  assert.equal(document.querySelectorAll('.column').length, 4);
+  assert.equal(document.querySelectorAll('.column').length, 5);
   assert.equal(document.querySelectorAll('.card').length, 3);
   clean('board');
   click(buttonWith(app.main(), 'List'));

@@ -10,6 +10,7 @@ const profiles = require('../server/services/profiles');
 const clients = require('../server/services/clients');
 const projects = require('../server/services/projects');
 const tasks = require('../server/services/tasks');
+const sops = require('../server/services/sops');
 const { todayIn, addDays } = require('../server/services/dates');
 
 const PASSWORD = 'demo-password-123';
@@ -49,13 +50,26 @@ const PASSWORD = 'demo-password-123';
   const site = projects.createProject(db, owner, { clientId: acme.id, name: 'New website', status: 'active', description: 'Rebuild the practice website with online booking.', startDate: day(-14), dueDate: day(30), managerId: id('mark') });
   const seo = projects.createProject(db, owner, { clientId: acme.id, name: 'Local SEO', status: 'active', description: 'Google Business Profile and citations.', startDate: day(-30), dueDate: day(60), managerId: id('mark') });
   const shop = projects.createProject(db, owner, { clientId: bloom.id, name: 'Online shop', status: 'planning', startDate: day(7), dueDate: day(75), managerId: id('rayne') });
+  const citation = sops.createSop(db, owner, {
+    title: 'Local Citation Clean-up', service: 'SEO', status: 'approved', requiresQa: true,
+    purpose: 'Make a business name, address and phone number match on every directory.',
+    whenToUse: 'A new local SEO client, or after a move or rebrand.',
+    inputs: 'The correct business details, access to the main directories',
+    steps: ['Export the current listings from the citation tool', 'Mark every listing that does not match', 'Fix or claim each mismatched listing', 'Remove duplicates', 'Record the changes in the client sheet'],
+    checklist: ['Name, address and phone match everywhere', 'Duplicates removed', 'Changes recorded in the client sheet'],
+    expectedOutput: 'A clean citation list with a change log',
+    commonMistakes: 'Using a tracking number on some listings and the main number on others',
+  });
+  sops.addVersion(db, owner, citation.id, { steps: ['Export the current listings from the citation tool', 'Mark every listing that does not match', 'Fix or claim each mismatched listing', 'Remove duplicates', 'Check the top 10 directories by hand', 'Record the changes in the client sheet'], changeNote: 'Added a manual check of the top directories' });
+  sops.createSop(db, owner, { title: 'Monthly SEO Report', service: 'SEO', status: 'testing', steps: ['Pull rankings', 'Pull traffic', 'Write the summary'], checklist: ['Numbers match the source'], requiresQa: true });
+  sops.createSop(db, owner, { title: 'Onboarding call', service: 'Account management', status: 'draft', steps: ['Introductions'] });
   const T = (project, title, extra) => tasks.createTask(db, owner, { projectId: project.id, title, ...extra });
   T(site, 'Homepage copy', { assigneeId: id('cole'), priority: 'high', status: 'in_progress', dueDate: day(2), estimateHours: 6, description: 'Draft copy for the home, services and about pages.' });
   T(site, 'Booking form wireframe', { assigneeId: id('mark'), priority: 'urgent', dueDate: day(-2), estimateHours: 8 });
   T(site, 'Sitemap and navigation', { assigneeId: id('mark'), status: 'done', dueDate: day(-7), estimateHours: 3 });
   T(site, 'Photo shoot schedule', { assigneeId: id('rayne'), dueDate: day(5), estimateHours: 2 });
-  T(seo, 'Claim Google Business Profile', { assigneeId: id('sarah'), status: 'review', dueDate: day(1), estimateHours: 2 });
-  T(seo, 'Citation clean-up', { assigneeId: id('sarah'), dueDate: day(10), estimateHours: 14, priority: 'high' });
+  T(seo, 'Claim Google Business Profile', { assigneeId: id('sarah'), status: 'review', sopId: citation.id, dueDate: day(1), estimateHours: 2 });
+  T(seo, 'Citation clean-up', { assigneeId: id('sarah'), sopId: citation.id, dueDate: day(10), estimateHours: 14, priority: 'high' });
   T(seo, 'Keyword research', { assigneeId: id('sarah'), dueDate: day(-1), estimateHours: 6 });
   T(seo, 'Monthly report template', { priority: 'low' });
   T(shop, 'Product list from client', { assigneeId: id('rayne'), dueDate: day(8), estimateHours: 2 });

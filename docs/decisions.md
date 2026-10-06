@@ -48,3 +48,11 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 - OAuth sign-in so the claude.ai web and phone apps can connect with just the address. A connection shows up as a revocable key.
 - Every role can connect their own AI (`ai.use`). It acts as that person with their role. Owner and Admin see and decide everyone's connections and proposals. Specs: `docs/specs/2026-10-06-phase-3b-oauth.md` and `phase-3c-agent-setup.md`.
 - One MCP address for everyone. Identity comes from the key or the sign-in, not from the address.
+
+## 2026-10-06: Phase 4 SOPs and QA built
+
+- SOPs with versions (never overwritten), status (draft, testing, approved, deprecated) and a "needs QA" flag. Tasks pin the SOP version they follow. Work can be started from an SOP, as one task or one task per step.
+- QA: a task submitted for QA gets a record with the SOP checklist. Owner, Admin and Manager review; approval needs every item ticked, requesting changes needs a comment. Nobody reviews their own work except the Owner.
+- Work that needs QA reaches Done only by approval. Changes requested is set only by a review.
+- An AI can draft SOPs and start work from them, but cannot approve an SOP or review work: those are human decisions.
+- Migration 005 rebuilds the tasks table (new status, SOP link). Tested against data from the previous schema. Spec: `docs/specs/2026-10-06-phase-4-sops-and-qa.md`.

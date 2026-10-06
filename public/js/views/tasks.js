@@ -2,7 +2,7 @@
 // Tasks: the list and board, the task sheet with comments, and the add and edit form.
 import { h, icon, openSheet } from '../dom.js';
 import { api } from '../api.js';
-import { avatar, field, selectField, textareaField, sheetForm, confirmButton, statusPill, priorityPill, dueLabel, formatDay, formatWhen, STATUS_LABEL, PRIORITY_LABEL } from '../ui.js';
+import { avatar, field, selectField, textareaField, sheetForm, confirmButton, statusPill, priorityPill, dueLabel, formatDay, formatWhen, pill, STATUS_LABEL, PRIORITY_LABEL, QA_RESULT_LABEL } from '../ui.js';
 
 const STATUSES = Object.keys(STATUS_LABEL);
 let view = 'list';
@@ -25,6 +25,35 @@ async function loadComments(box, taskId) {
     h('p', {}, c.body))));
 }
 
+// The SOP a task follows: the pinned version's instructions, one click away.
+function sopBlock(session, task) {
+  if (!task.sop) return null;
+  const c = task.sop.content;
+  const list = (tag, items) => (items.length ? h(tag, { class: 'steps' }, items.map((i) => h('li', {}, i))) : null);
+  const text = (title, value) => (value ? h('div', {}, h('h4', { class: 'mini-title' }, title), h('p', { class: 'prose' }, value)) : null);
+  return h('section', { class: 'sop-block' },
+    h('div', { class: 'row-between' },
+      session.can['sops.view'] ? h('a', { class: 'link', href: `#/sops/${task.sop.id}` }, `${task.sop.title} v${task.sop.version}`) : h('strong', {}, `${task.sop.title} v${task.sop.version}`),
+      task.sop.isLatest ? null : h('span', { class: 'muted' }, `Newer version ${task.sop.latestVersion} exists`)),
+    h('details', {}, h('summary', {}, 'Instructions'),
+      text('Purpose', c.purpose), text('Required inputs', c.inputs),
+      c.steps.length ? h('div', {}, h('h4', { class: 'mini-title' }, 'Steps'), list('ol', c.steps)) : null,
+      c.checklist.length ? h('div', {}, h('h4', { class: 'mini-title' }, 'Quality checklist'), list('ul', c.checklist)) : null,
+      text('Expected output', c.expectedOutput), text('Common mistakes', c.commonMistakes)));
+}
+
+// What QA has said about this task so far.
+function qaBlock(task) {
+  if (!task.qa.required && task.qa.history.length === 0) return null;
+  return h('section', { class: 'qa-block' },
+    h('div', { class: 'row-between' }, h('h3', { class: 'section-title' }, 'QA'), task.qa.required ? h('span', { class: 'pill role-owner' }, 'Needs QA') : null),
+    task.qa.history.length === 0 ? h('p', { class: 'muted' }, 'Not submitted yet.') : task.qa.history.map((r) => h('div', { class: 'comment' },
+      h('div', { class: 'comment-head' }, pill('pp', r.status === 'changes_requested' ? 'failed' : r.status === 'approved' ? 'approved' : r.status === 'withdrawn' ? 'rejected' : 'pending', QA_RESULT_LABEL[r.status]),
+        h('span', { class: 'muted' }, r.reviewerName ? `${r.reviewerName}, ${formatWhen(r.reviewedAt)}` : `Submitted ${formatWhen(r.submittedAt)}`)),
+      r.comments ? h('p', {}, r.comments) : null,
+      r.checklist.length ? h('p', { class: 'muted' }, `Checklist ${r.checklist.filter((c) => c.checked).length} of ${r.checklist.length}`) : null)));
+}
+
 export async function openTask(session, taskId, onChanged) {
   const task = await api('GET', `/tasks/${taskId}`);
   openSheet(task.title, (close) => {
@@ -36,6 +65,8 @@ export async function openTask(session, taskId, onChanged) {
       h('dt', {}, 'Estimate'), h('dd', {}, task.estimateHours == null ? 'None' : `${task.estimateHours} hours`));
     const error = h('div', { class: 'error', role: 'alert' });
     const status = selectField('Status', STATUSES.map((s) => [s, STATUS_LABEL[s]]), task.status, { name: 'status', disabled: !task.canChangeStatus });
+    // Changes requested comes only from a review, and work that needs QA reaches Done only by approval.
+    for (const o of status.input.options) o.disabled = (o.value === 'changes' && task.status !== 'changes') || (o.value === 'done' && task.qaRequired && task.status !== 'done');
     status.input.addEventListener('change', async () => {
       error.textContent = '';
       try { await api('PATCH', `/tasks/${task.id}`, { status: status.input.value }); await onChanged(); } catch (err) { error.textContent = err.message; status.input.value = task.status; }
@@ -52,10 +83,18 @@ export async function openTask(session, taskId, onChanged) {
       post.disabled = false;
     } }, body.el, cError, h('div', { class: 'sheet-actions' }, post));
     loadComments(comments, task.id).catch((err) => { cError.textContent = err.message; });
+    const submit = task.canChangeStatus && ['todo', 'in_progress', 'changes'].includes(task.status)
+      ? h('button', { class: 'btn btn-primary', type: 'button', onclick: async () => {
+        error.textContent = '';
+        try { await api('PATCH', `/tasks/${task.id}`, { status: 'review' }); close(); await onChanged(); } catch (err) { error.textContent = err.message; }
+      } }, 'Submit for QA') : null;
+    const review = session.can['qa.review'] && task.status === 'review' && task.qa.pending
+      ? h('button', { class: 'btn btn-primary', type: 'button', onclick: () => { close(); import('./qa.js').then((m) => m.openReview(session, task.id, onChanged)).catch((e) => alert(e.message)); } }, 'Review')
+      : null;
     return h('div', { class: 'sheet-body' },
       h('div', { class: 'row-between' }, statusPill(task.status), task.canEdit && h('button', { class: 'btn', type: 'button', onclick: () => { close(); openTaskForm(session, { task }, onChanged).catch((e) => alert(e.message)); } }, 'Edit')),
       task.description && h('p', { class: 'prose' }, task.description),
-      facts, status.el, error,
+      facts, sopBlock(session, task), status.el, h('div', { class: 'sheet-actions left' }, submit, review), error, qaBlock(task),
       h('h3', { class: 'section-title' }, 'Comments'), comments, form);
   });
 }
@@ -63,15 +102,21 @@ export async function openTask(session, taskId, onChanged) {
 // ---- the add and edit form ----
 
 export async function openTaskForm(session, { task, projectId } = {}, onChanged) {
-  const [projects, members] = await Promise.all([api('GET', '/projects'), api('GET', '/members')]);
+  const [projects, members, allSops] = await Promise.all([api('GET', '/projects'), api('GET', '/members'), session.can['sops.view'] ? api('GET', '/sops') : []]);
   const usable = projects.filter((p) => p.status !== 'archived' || (task && task.projectId === p.id));
+  const sopChoices = allSops.filter((x) => ['testing', 'approved'].includes(x.status) || (task && task.sopId === x.id));
   openSheet(task ? 'Edit task' : 'New task', (close) => {
     const title = field('Title', { name: 'title', maxlength: 200, required: true, value: task ? task.title : '' });
     const project = selectField('Project', usable.map((p) => [p.id, `${p.name}, ${p.clientName}`]), task ? task.projectId : projectId || (usable[0] && usable[0].id), { name: 'projectId' });
     const people = members.filter((m) => m.isActive || (task && task.assigneeId === m.id));
     const assignee = selectField('Assigned to', [['', 'Nobody'], ...people.map((m) => [m.id, m.displayName])], task && task.assigneeId ? task.assigneeId : '', { name: 'assigneeId' });
-    const status = selectField('Status', STATUSES.map((s) => [s, STATUS_LABEL[s]]), task ? task.status : 'todo', { name: 'status' });
+    const status = selectField('Status', STATUSES.filter((s) => s !== 'changes' || (task && task.status === 'changes')).map((s) => [s, STATUS_LABEL[s]]), task ? task.status : 'todo', { name: 'status' });
     const priority = selectField('Priority', Object.entries(PRIORITY_LABEL), task ? task.priority : 'normal', { name: 'priority' });
+    const sop = selectField('SOP', [['', 'No SOP'], ...sopChoices.map((x) => [x.id, `${x.title} v${x.version}`])], task && task.sopId ? task.sopId : '', { name: 'sopId' });
+    const needsQa = h('input', { type: 'checkbox', name: 'qaRequired', checked: task ? task.qaRequired : false });
+    // Choosing an SOP carries its QA setting over, which the person can still change.
+    sop.input.addEventListener('change', () => { const chosen = sopChoices.find((x) => String(x.id) === sop.input.value); if (chosen) needsQa.checked = chosen.requiresQa; });
+    const newest = task && task.sop && !task.sop.isLatest ? h('input', { type: 'checkbox', name: 'sopLatest' }) : null;
     const due = field('Due date', { name: 'dueDate', type: 'date', value: task && task.dueDate ? task.dueDate : '' });
     const estimate = field('Estimate (hours)', { name: 'estimateHours', type: 'number', min: 0, max: 1000, step: '0.25', value: task && task.estimateHours != null ? task.estimateHours : '' });
     const description = textareaField('Description', { name: 'description', maxlength: 10000 }, task ? task.description : '');
@@ -79,9 +124,10 @@ export async function openTaskForm(session, { task, projectId } = {}, onChanged)
       title: title.input.value, projectId: Number(project.input.value), assigneeId: assignee.input.value === '' ? null : Number(assignee.input.value),
       status: status.input.value, priority: priority.input.value, dueDate: due.input.value || null,
       estimateHours: estimate.input.value === '' ? null : Number(estimate.input.value), description: description.input.value,
+      sopId: sop.input.value === '' ? null : Number(sop.input.value), qaRequired: needsQa.checked, ...(newest && newest.checked ? { sopLatest: true } : {}),
     });
     const del = task ? confirmButton('Delete task', 'Click again to delete', async () => { await api('DELETE', `/tasks/${task.id}`); close(); await onChanged(); }) : null;
-    return sheetForm([title, project, h('div', { class: 'two' }, assignee.el, priority.el), h('div', { class: 'two' }, status.el, due.el), estimate, description],
+    return sheetForm([title, project, h('div', { class: 'two' }, assignee.el, priority.el), h('div', { class: 'two' }, status.el, due.el), estimate, sopChoices.length || allSops.length ? sop : null, h('label', { class: 'check' }, needsQa, h('span', {}, 'Needs QA before it counts as done')), newest ? h('label', { class: 'check' }, newest, h('span', {}, `Use the newest SOP version (${task.sop.latestVersion})`)) : null, description],
       task ? 'Save' : 'Add task', async () => {
         if (task) await api('PATCH', `/tasks/${task.id}`, payload()); else await api('POST', '/tasks', payload());
         await onChanged();

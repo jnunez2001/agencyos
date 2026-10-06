@@ -63,7 +63,9 @@ export function formatWhen(iso) {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
 }
 
-export const STATUS_LABEL = { todo: 'To do', in_progress: 'In progress', review: 'In review', done: 'Done' };
+export const STATUS_LABEL = { todo: 'To do', in_progress: 'In progress', review: 'In QA', changes: 'Changes requested', done: 'Done' };
+export const SOP_STATUS_LABEL = { draft: 'Draft', testing: 'Testing', approved: 'Approved', deprecated: 'Deprecated' };
+export const QA_RESULT_LABEL = { pending: 'Waiting', approved: 'Approved', changes_requested: 'Changes requested', withdrawn: 'Withdrawn' };
 export const PRIORITY_LABEL = { low: 'Low', normal: 'Normal', high: 'High', urgent: 'Urgent' };
 export const PROJECT_STATUS_LABEL = { planning: 'Planning', active: 'Active', on_hold: 'On hold', completed: 'Completed', archived: 'Archived' };
 export const CLIENT_STATUS_LABEL = { active: 'Active', paused: 'Paused', archived: 'Archived' };
@@ -100,7 +102,7 @@ export function sheetForm(fields, label, submit, close, extra) {
     error.textContent = '';
     save.disabled = true;
     try { await submit(); close(); } catch (err) { error.textContent = err.message; save.disabled = false; }
-  } }, fields.map((f) => f.el || f), error, extra, h('div', { class: 'sheet-actions' }, h('button', { class: 'btn', type: 'button', onclick: () => close() }, 'Cancel'), save));
+  } }, fields.filter(Boolean).map((f) => f.el || f), error, extra, h('div', { class: 'sheet-actions' }, h('button', { class: 'btn', type: 'button', onclick: () => close() }, 'Cancel'), save));
 }
 
 // A first click arms the button, the second confirms. No browser dialog needed.
