@@ -1,6 +1,7 @@
 // Joshua Nunez
 // The two shortcuts in the shell: Search (also the / key) and Create. Search shows what this person may see, grouped by
 // kind; Create lists only what their role may add and opens the same forms the screens use.
+import { bellButton } from './bell.js';
 import { h, icon, openSheet, goAfterSheets } from './dom.js';
 import { api } from './api.js';
 import { openEventForm } from './views/calendar.js';
@@ -8,7 +9,8 @@ import { openNoteForm } from './views/meetings.js';
 import { openTaskForm } from './views/tasks.js';
 import { openProjectForm } from './views/projects.js';
 import { openClientForm } from './views/clients.js';
-import { openRequestForm, openFollowUpForm, openDecisionForm } from './views/createforms.js';
+import { openRequestForm } from './views/requests.js';
+import { openFollowUpForm, openDecisionForm } from './views/records.js';
 
 const MIN = 2;
 
@@ -96,13 +98,16 @@ export function openCreate(session, onChanged) {
 
 // The two buttons. `compact` is the icon-only pair for the phone's top bar.
 export function quickButtons(session, onChanged, { compact = false } = {}) {
+  const bell = bellButton(onChanged, { compact });
   const create = creatableFor(session).length > 0;
   if (compact) {
     return h('div', { class: 'foot-actions' },
       h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Search', onclick: () => openSearch() }, icon('search')),
+      bell,
       create && h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Create', onclick: () => openCreate(session, onChanged) }, icon('plus')));
   }
   return h('div', { class: 'quick' },
     h('button', { class: 'quick-search', type: 'button', 'aria-label': 'Search', onclick: () => openSearch() }, icon('search'), h('span', { class: 'grow' }, 'Search'), h('kbd', {}, '/')),
+    bell,
     create && h('button', { class: 'btn btn-primary quick-create', type: 'button', 'aria-label': 'Create', onclick: () => openCreate(session, onChanged) }, icon('plus'), 'Create'));
 }

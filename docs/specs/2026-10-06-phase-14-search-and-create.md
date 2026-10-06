@@ -16,5 +16,5 @@ Joshua Nunez. Two shortcuts in the app shell: find anything from one box, and st
 
 ## Create
 - A Create button beside search opens a menu of what this role may create, from the `can` map: event (events.view; Employees and Contractors may only block their own time), meeting notes (notes.view), client request (requests.create), follow-up (followups.create), task (tasks.manage), project (projects.manage), client (clients.manage), decision (decisions.manage).
-- It opens the existing forms. Requests, follow-ups and decisions use small forms in `public/js/views/createforms.js`, posting to `/api/requests`, `/api/follow-ups` and `/api/decisions`.
+- It opens the existing forms. Requests, follow-ups and decisions open the same full forms as their screens (`views/requests.js`, `views/records.js`).
 - The server stays the judge: the menu only hides what the server would refuse.

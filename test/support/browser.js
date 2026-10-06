@@ -147,6 +147,9 @@ function answers(role, { mustChange = false, empty = false, signedOut = false } 
     if (/^\/meeting-notes\/\d+$/.test(pathname) && method === 'GET') return { ...NOTE, canEdit: true, canFinalize: !!can['notes.manage'], canDelete: !!can['notes.manage'] };
     if (/^\/meeting-notes\/\d+$/.test(pathname) && method === 'PATCH') return { ...NOTE, ...body, canEdit: true, canFinalize: true, canDelete: true };
     if (/^\/meeting-notes\/\d+$/.test(pathname) && method === 'DELETE') return { deleted: true };
+    if (pathname === '/notifications/count') return { unread: 2 };
+    if (pathname === '/notifications' && method === 'GET') return [{ id: 2, type: 'task_assigned', title: 'Task assigned to you: Homepage copy', body: '', link: '#/projects/1', isRead: false, readAt: null, createdAt: NOW }, { id: 1, type: 'digest', title: 'Your day: 1 overdue', body: '1 overdue task', link: '#/dashboard', isRead: true, readAt: NOW, createdAt: NOW }];
+    if (/^\/notifications\/(\d+|read-all)(\/read)?$/.test(pathname) && method === 'POST') return { ok: true };
     if (pathname === '/requests' && method === 'GET') return [{ ...REQUEST, canEdit: true, canManage: !!can['requests.manage'], canConvert: !!can['requests.manage'] }];
     if (pathname === '/requests' && method === 'POST') return { ...REQUEST, id: 8, ...body };
     if (/^\/requests\/\d+$/.test(pathname) && method === 'GET') return { ...REQUEST, canEdit: true, canManage: !!can['requests.manage'], canConvert: !!can['requests.manage'] };

@@ -421,3 +421,9 @@ a.chip { display: inline-flex; align-items: center; text-decoration: none; color
 .search-group .label { padding-bottom: 2px; }
 .search-group .row:focus-visible { background: var(--hover); outline-offset: -2px; }
 .create-menu { gap: 2px; }
+.bell { position: relative; }
+.badge { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: #fff; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; }
+.icon-btn.bell .badge { position: absolute; top: 2px; right: 2px; }
+.notif-list { display: flex; flex-direction: column; gap: 8px; }
+.notif { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 10px 12px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: 10px; background: var(--card); }
+.notif.read { border-left-color: var(--line); opacity: 0.7; }
