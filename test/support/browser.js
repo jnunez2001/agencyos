@@ -20,6 +20,11 @@ CAN.admin = CAN.owner;
 for (const role of ['owner', 'manager', 'employee', 'contractor']) Object.assign(CAN[role], { 'sopchanges.view': 1, 'sopchanges.create': 1 });
 for (const role of ['owner', 'manager']) CAN[role]['sopchanges.manage'] = 1;
 const CHANGE = (id, status, extra = {}) => ({ id, sopId: 1, sopTitle: 'Page Optimization', title: id === 1 ? 'Add a speed check' : id === 2 ? 'Reword step two' : 'Older fix', details: 'Pages are slow and nobody checks', proposedText: '', hasProposedContent: id !== 2, priority: id === 1 ? 'high' : 'normal', status, sourceType: id === 1 ? 'task' : null, sourceId: id === 1 ? 1 : null, sourceTitle: null, rejectedReason: '', reviewedByName: null, reviewedAt: null, publishedVersionId: null, publishedVersion: null, publishedByName: null, publishedAt: null, createdBy: 2, createdByName: 'Rayne', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), canEdit: false, canPublish: false, ...extra });
+// Time tracking, capacity and retainers (added separately so each role's list stays easy to read).
+Object.assign(CAN.owner, { 'time.log': 1, 'time.review': 1, 'time.view_team': 1, 'retainers.view': 1, 'retainers.manage': 1 });
+Object.assign(CAN.manager, { 'time.log': 1, 'time.review': 1, 'time.view_team': 1, 'retainers.view': 1, 'retainers.manage': 1 });
+Object.assign(CAN.employee, { 'time.log': 1, 'retainers.view': 1 });
+Object.assign(CAN.contractor, { 'time.log': 1 });
 
 const PEOPLE = [
   { id: 1, username: 'josh', displayName: 'Josh Nunez', role: 'owner', isActive: true, jobTitle: 'Founder', department: '', mustChangePassword: false },
@@ -63,7 +68,7 @@ const SOP_LIST = [
   { id: 1, title: 'Page Optimization', service: 'SEO', ownerId: 1, ownerName: 'Josh Nunez', status: 'approved', requiresQa: true, version: '1.1', versionId: 2, createdAt: NOW, updatedAt: NOW },
   { id: 2, title: 'Draft idea', service: '', ownerId: 3, ownerName: 'Mark Cruz', status: 'draft', requiresQa: false, version: '1.0', versionId: 3, createdAt: NOW, updatedAt: NOW },
 ];
-const taskRow = (id, title, status, extra = {}) => ({ id, goalId: null, goalTitle: null, goalInherited: false, sopId: null, sopTitle: null, sopVersion: null, qaRequired: false, projectId: 1, projectName: 'New website', clientId: 1, clientName: 'Acme Dental', title, description: '', status, priority: 'normal', assigneeId: null, assigneeName: null, dueDate: null, estimateHours: null, completedAt: null, isOverdue: false, createdAt: NOW, updatedAt: NOW, ...extra });
+const taskRow = (id, title, status, extra = {}) => ({ id, goalId: null, goalTitle: null, goalInherited: false, sopId: null, sopTitle: null, sopVersion: null, qaRequired: false, projectId: 1, projectName: 'New website', clientId: 1, clientName: 'Acme Dental', title, description: '', status, priority: 'normal', assigneeId: null, assigneeName: null, dueDate: null, estimateHours: null, loggedHours: 1.5, completedAt: null, isOverdue: false, createdAt: NOW, updatedAt: NOW, ...extra });
 const GOOGLE_BY_ID = { 1: { linked: true, email: 'josh@example.com', pending: false }, 2: { linked: false, email: null, pending: false }, 3: { linked: false, email: 'mark@example.com', pending: true }, 4: { linked: true, email: 'sarah@example.com', pending: false } };
 const RANK = { owner: 5, admin: 4, manager: 3, employee: 2, contractor: 1 };
 
@@ -73,6 +78,7 @@ function answers(role, { mustChange = false, empty = false, signedOut = false } 
   const assignable = role === 'owner' ? ROLES : role === 'admin' ? ['manager', 'employee', 'contractor'] : [];
   const profile = { userId: me.id, username: me.username, displayName: me.displayName, role, jobTitle: 'Delivery Manager', department: 'Operations', timezone: 'Asia/Manila', workDays: [1, 2, 3, 4, 5], workStart: '09:00', workEnd: '17:00', weeklyCapacityHours: 40 };
   const google = { link: null };
+  const held = { timer: null }; // the person's timer, kept between calls
   return (method, url, body) => {
     const [pathname] = url.split('?');
     if (pathname === '/status') return { needsSetup: false, setupCodeRequired: false, googleSignIn: true };
@@ -201,6 +207,34 @@ function answers(role, { mustChange = false, empty = false, signedOut = false } 
       { id: 2, action: 'profile.update', objectType: 'member', objectId: 3, actorId: 3, actorName: 'Mark Cruz', before: { workDays: [1, 2] }, after: { workDays: [1, 2, 3] }, source: 'web', createdAt: '2026-10-01T08:00:00.000Z' },
       { id: 1, action: 'something.new', objectType: null, objectId: null, actorId: null, actorName: 'System', before: null, after: null, source: 'system', createdAt: '2026-09-01T08:00:00.000Z' },
     ];
+    // ---- time tracking, capacity and retainers ----
+    const localKey = (offset = 0) => { const d = new Date(); d.setDate(d.getDate() + offset); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+    const timeRow = (id, status, extra = {}) => ({ id, userId: me.id, userName: me.displayName, date: localKey(), minutes: 90, hours: 1.5, startedAt: null, endedAt: null, clientId: mineOnly ? 1 : 1, clientName: mineOnly ? null : 'Acme Dental', projectId: 1, projectName: mineOnly ? null : 'New website', taskId: 1, taskTitle: 'Homepage copy', description: 'Wrote the hero section', timeType: 'billable', status, reviewerId: null, reviewerName: null, reviewedAt: null, reviewNote: '', lockedAt: null, timerState: 'none', timerStartedAt: null, elapsedSeconds: 0, createdAt: NOW, updatedAt: NOW, canEdit: ['draft', 'rejected'].includes(status), canDelete: ['draft', 'rejected'].includes(status), canSubmit: ['draft', 'rejected'].includes(status), canReview: false, canLock: false, ...extra });
+    const query = new URLSearchParams(url.split('?')[1] || '');
+    if (pathname === '/time-entries' && method === 'GET') {
+      if (query.get('mine')) return [timeRow(1, 'draft'), timeRow(2, 'rejected', { date: localKey(), minutes: 30, hours: 0.5, description: 'Logo tweaks', reviewNote: 'Add the task', reviewerName: 'Mark Cruz' }), timeRow(3, 'approved', { minutes: 60, hours: 1 })];
+      if (!can['time.view_team']) return { __status: 403, error: 'Not allowed' };
+      if (query.get('status') === 'approved') return [timeRow(5, 'approved', { userId: 4, userName: 'Sarah', canLock: !!can['time.review'] })];
+      return [timeRow(4, 'submitted', { userId: 4, userName: 'Sarah', description: 'Citation clean-up', canReview: !!can['time.review'] }), timeRow(6, 'submitted', { userId: 2, userName: 'Rayne', minutes: 45, hours: 0.75, canReview: !!can['time.review'] })];
+    }
+    if (pathname === '/time-entries' && method === 'POST') return { ...timeRow(9, 'draft'), minutes: body.minutes, hours: body.minutes / 60 };
+    if (pathname === '/time-entries/submit' && method === 'POST') return { submitted: 2, ids: [1, 2] };
+    if (/^\/time-entries\/\d+$/.test(pathname) && method === 'PATCH') return { ...timeRow(1, 'draft'), ...body };
+    if (/^\/time-entries\/\d+$/.test(pathname) && method === 'DELETE') return { deleted: true };
+    if (/^\/time-entries\/\d+\/(approve|reject|lock)$/.test(pathname) && method === 'POST') return timeRow(4, pathname.endsWith('approve') ? 'approved' : pathname.endsWith('reject') ? 'rejected' : 'locked');
+    if (pathname === '/time/timer' && method === 'GET') return held.timer || null;
+    if (pathname === '/time/timer/start' && method === 'POST') { held.timer = timeRow(7, 'draft', { timerState: 'running', minutes: 0, elapsedSeconds: 125, ...body }); return held.timer; }
+    if (pathname === '/time/timer/pause' && method === 'POST') { held.timer = { ...held.timer, timerState: 'paused' }; return held.timer; }
+    if (pathname === '/time/timer/resume' && method === 'POST') { held.timer = { ...held.timer, timerState: 'running' }; return held.timer; }
+    if (pathname === '/time/timer/stop' && method === 'POST') { held.timer = null; return timeRow(7, 'draft', { minutes: 2, hours: 0.03 }); }
+    if (pathname === '/capacity' && method === 'GET') {
+      const from = query.get('weekStart') || localKey();
+      const person = (id, name, capacityHours, planned, logged, status, note) => ({ userId: id, displayName: name, role: 'employee', capacityHours, taskHours: planned, eventHours: 0, plannedHours: planned, loggedHours: logged, utilizationPercent: Math.round((Math.max(planned, logged) / capacityHours) * 100), status, note });
+      const people = can['time.view_team'] ? [person(1, 'Josh Nunez', 40, 20, 5, 'ok', ''), person(4, 'Sarah', 20, 26, 4, 'over', 'Over capacity by 6 hours'), person(me.id, me.displayName, 40, 6, 2, 'under', 'Only 15 percent of capacity is planned or logged')] : [person(me.id, me.displayName, 40, 6, 2, 'under', 'Only 15 percent of capacity is planned or logged')];
+      return { weekStart: from, weekEnd: from, weeks: [{ weekStart: from, weekEnd: from, people }] };
+    }
+    if (pathname === '/clients/1/retainer' && method === 'GET') return can['retainers.view'] ? { clientId: 1, retainer: { id: 1, clientId: 1, hoursAllocated: 20, startDate: '2026-09-01', isActive: true }, canManage: !!can['retainers.manage'], usage: { retainerId: 1, clientId: 1, clientName: 'Acme Dental', period: { from: '2026-10-01', to: '2026-10-31' }, startDate: '2026-09-01', started: true, allocatedHours: 20, usedHours: 17, remainingHours: 3, overHours: 0, pendingHours: 2, percent: 85, level: 'warning', message: '85 percent of the retainer is used, 3 hours left' } } : { __status: 403, error: 'Not allowed' };
+    if (pathname === '/clients/1/retainer' && method === 'PUT') return { clientId: 1, retainer: { id: 1, clientId: 1, hoursAllocated: body.hoursAllocated || 20, startDate: body.startDate || '2026-09-01', isActive: true }, canManage: true, usage: null };
     return { ok: true };
   };
 }

@@ -20,6 +20,9 @@ const decisions = require('../services/decisions');
 const followups = require('../services/followups');
 const notifications = require('../services/notifications');
 const workspace = require('../services/workspace');
+const timeentries = require('../services/timeentries');
+const capacity = require('../services/capacity');
+const retainers = require('../services/retainers');
 const tasks = require('../services/tasks');
 const apikeys = require('../services/apikeys');
 const aiplans = require('../services/aiplans');
@@ -284,6 +287,27 @@ module.exports = function apiRouter(db, { google = null } = {}) {
   r.post('/oauth/requests/:id/deny', (req, res) => res.json(oauth.decideRequest(db, ctxOf(req), req.params.id, { approve: false, issuer: originOf(req) })));
 
   r.get('/search', (req, res) => res.json(search.search(db, ctxOf(req), req.query.q, { limit: req.query.limit })));
+  // ---- time tracking, capacity and client retainers (roadmap steps 8 to 10) ----
+  r.get('/time-entries', (req, res) => res.json(timeentries.listEntries(db, ctxOf(req), { ...req.query, mine: req.query.mine === '1' })));
+  r.post('/time-entries', (req, res) => res.json(timeentries.createEntry(db, ctxOf(req), req.body)));
+  r.post('/time-entries/submit', (req, res) => res.json(timeentries.submitEntries(db, ctxOf(req), req.body || {})));
+  r.get('/time-entries/:id', (req, res) => res.json(timeentries.getEntry(db, ctxOf(req), idParam(req))));
+  r.patch('/time-entries/:id', (req, res) => res.json(timeentries.updateEntry(db, ctxOf(req), idParam(req), req.body)));
+  r.delete('/time-entries/:id', (req, res) => res.json(timeentries.deleteEntry(db, ctxOf(req), idParam(req))));
+  r.post('/time-entries/:id/approve', (req, res) => res.json(timeentries.approveEntry(db, ctxOf(req), idParam(req), req.body || {})));
+  r.post('/time-entries/:id/reject', (req, res) => res.json(timeentries.rejectEntry(db, ctxOf(req), idParam(req), req.body || {})));
+  r.post('/time-entries/:id/lock', (req, res) => res.json(timeentries.lockEntry(db, ctxOf(req), idParam(req))));
+  r.get('/time/timer', (req, res) => res.json(timeentries.getTimer(db, ctxOf(req))));
+  r.post('/time/timer/start', (req, res) => res.json(timeentries.startTimer(db, ctxOf(req), req.body || {})));
+  r.post('/time/timer/pause', (req, res) => res.json(timeentries.pauseTimer(db, ctxOf(req))));
+  r.post('/time/timer/resume', (req, res) => res.json(timeentries.resumeTimer(db, ctxOf(req))));
+  r.post('/time/timer/stop', (req, res) => res.json(timeentries.stopTimer(db, ctxOf(req))));
+  r.get('/capacity', (req, res) => res.json(capacity.workloadCapacity(db, ctxOf(req), { weekStart: req.query.weekStart, weeks: req.query.weeks, userId: req.query.userId })));
+  r.get('/retainers', (req, res) => res.json(retainers.listUsage(db, ctxOf(req), { clientId: req.query.clientId })));
+  r.get('/clients/:id/retainer', (req, res) => res.json(retainers.getRetainer(db, ctxOf(req), idParam(req))));
+  r.put('/clients/:id/retainer', (req, res) => res.json(retainers.saveRetainer(db, ctxOf(req), idParam(req), req.body)));
+  // ---- end of time tracking, capacity and retainers ----
+
   r.get('/dashboard', (req, res) => res.json(dashboard.getDashboard(db, ctxOf(req))));
 
   r.use((req, res) => res.status(404).json({ error: 'Not found' }));

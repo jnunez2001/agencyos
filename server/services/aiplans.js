@@ -15,6 +15,7 @@ const noterecords = require('./noterecords');
 const requests = require('./requests');
 const decisions = require('./decisions');
 const followups = require('./followups');
+const timeentries = require('./timeentries');
 const sops = require('./sops');
 const sopchanges = require('./sopchanges');
 const goals = require('./goals');
@@ -31,6 +32,8 @@ const noStatus = (a) => { if (a.status !== undefined) fail(403, 'AI cannot final
 const noRequestVerdict = (a) => { if (['approved', 'rejected', 'in_progress'].includes(a.status)) fail(403, 'AI cannot approve, reject or start a client request. A manager decides'); return a; };
 // Approving, rejecting, starting, testing or publishing an SOP change is a person's decision.
 const noChangeVerdict = (a) => { if (['approved', 'rejected', 'in_progress', 'testing', 'published'].includes(a.status) || a.rejectedReason !== undefined) fail(403, 'AI cannot approve, reject, start, test or publish an SOP change. A manager decides'); return a; };
+// An AI only logs and edits draft time. Submitting, approving, rejecting and locking are a person's.
+const noTimeStatus = (a) => { if (a.status !== undefined) fail(403, 'AI cannot submit, approve, reject or lock time. A person does that'); return a; };
 const withId = (args, fn) => { const { id, ...rest } = args; return fn(id, rest); };
 
 // Everything an AI can do. Nothing here touches members, roles, passwords, keys or settings, and nothing deletes.
@@ -53,6 +56,8 @@ const ACTIONS = {
   create_follow_up: (db, ctx, a) => followups.createFollowUp(db, ctx, a),
   update_follow_up: (db, ctx, a) => withId(a, (id, rest) => followups.updateFollowUp(db, ctx, id, rest)),
   create_records_from_note: (db, ctx, a) => { const { noteId, ...rest } = a; const r = noterecords.extractRecords(db, ctx, noteId, rest); return { id: r.noteId, name: `${r.created.decisions.length} decisions, ${r.created.requests.length} requests, ${r.created.followUps.length} follow-ups` }; },
+  log_time: (db, ctx, a) => timeentries.createEntry(db, ctx, noTimeStatus(a)),
+  update_time_entry: (db, ctx, a) => withId(noTimeStatus(a), (id, rest) => timeentries.updateEntry(db, ctx, id, rest)),
   add_comment: (db, ctx, a) => { const { taskId, ...rest } = a; return tasks.addComment(db, ctx, taskId, rest); },
   record_result: (db, ctx, a) => { const { clientId, ...rest } = a; const r = results.recordResult(db, ctx, clientId, rest); return { id: r.id, name: `${r.metric}: ${r.value}` }; },
   create_report: (db, ctx, a) => reports.createReport(db, ctx, a),
@@ -179,6 +184,8 @@ function describe(db, organizationId, steps) {
       case 'create_sop_change': line = `Raise SOP change request "${a.title}" on SOP ${nameOf('sops', 'title', a.sopId)}`; break;
       case 'update_sop_change': line = `Change SOP change request ${nameOf('sop_change_requests', 'title', a.id)}: ${changed}`; break;
       case 'create_tasks_from_sop': line = `Create ${a.mode === 'steps' ? 'a task for each step of' : 'a task from'} SOP ${nameOf('sops', 'title', a.sopId)} in ${nameOf('projects', 'name', a.projectId)}`; break;
+      case 'log_time': line = `Log ${a.minutes ? `${a.minutes} minutes` : 'time'}${a.date ? ` on ${a.date}` : ''}${a.description ? `: ${trim(a.description)}` : ''}`; break;
+      case 'update_time_entry': line = `Change time entry #${a.id}: ${changed}`; break;
       case 'add_comment': line = `Comment on ${nameOf('tasks', 'title', a.taskId)}: ${trim(a.body || '')}`; break;
       default: line = s.action;
     }

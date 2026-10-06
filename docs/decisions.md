@@ -145,3 +145,13 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 ## 2026-10-06: Role workspaces (roadmap step 7)
 
 - The Dashboard is now each role's home: Today (My Day) for everyone, Needs a manager for Manager and above, Owner overview for Owner and Admin, all from one call (`GET /api/workspace`, MCP `get_workspace`) that only works out what the role may see. No migration. Spec: `docs/specs/2026-10-06-phase-17-role-workspaces.md`.
+## 2026-10-06: Time tracking, capacity and retainers (roadmap steps 8 to 10)
+
+- One spec for the three steps: `docs/specs/2026-10-06-phase-12-time-and-retainers.md`. Migrations 015 (time entries) and 016 (client retainers).
+- A timer is a draft entry with a timer state, and a unique index allows one per person. Stopping it makes an ordinary draft. Time is submitted by its owner, approved or rejected by a Manager or above (rejecting needs a note), and locked by a manager only after approval. Approved and locked time cannot be edited.
+- Only a person reviews: the service refuses approve, reject, lock, submit and the timer for an AI key, so even a plan run by an Owner's key cannot. AI can log and edit its owner's draft time through plans. Nobody approves their own time except an Owner.
+- Contractors log only on tasks assigned to them and never see client names. Everyone sees their own time; Managers see the team's.
+- Capacity is worked out per person per week (Monday to Sunday, UTC dates) as the larger of planned (open task estimates due that week plus attended events) and logged hours, over weekly capacity. Over 100 percent is an overload, under 50 percent an under-use note. The dashboard workload rows and a new `capacity` key carry it, with the old fields unchanged.
+- Retainers are monthly from the start date's day, one active per client, switched off rather than deleted. Only billable approved or locked time counts as used; submitted time shows as pending. Warning from 80 percent, over above 100.
+- New permissions: `time.log`, `time.review`, `time.view_team`, `retainers.view`, `retainers.manage`.
+- Not done yet: rates and invoicing, rollover of unused hours, timesheet exports, notifications for warnings.

@@ -11,7 +11,7 @@ test('an Employee reads SOPs, follows them on their task, submits for QA, and ca
   await import('../public/js/app.js');
   await app.wait(250);
   const { document } = app;
-  assert.deepEqual([...document.querySelectorAll('.sidebar .nav-link')].map((a) => a.textContent.trim()), ['Dashboard', 'Calendar', 'Meetings', 'Requests', 'Tasks', 'Projects', 'Clients', 'Reports', 'SOPs', 'Team', 'AI agent']);
+  assert.deepEqual([...document.querySelectorAll('.sidebar .nav-link')].map((a) => a.textContent.trim()), ['Dashboard', 'Calendar', 'Meetings', 'Requests', 'Time', 'Tasks', 'Projects', 'Clients', 'Reports', 'SOPs', 'Team', 'AI agent']);
   assert.doesNotMatch(app.main().textContent, /waiting for review/);
 
   await app.go('#/sops');

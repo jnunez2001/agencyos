@@ -6,6 +6,7 @@ const tasks = require('./tasks');
 const { today, addDays } = require('./dates');
 const aiplans = require('./aiplans');
 const qa = require('./qa');
+const capacity = require('./capacity');
 
 function getDashboard(db, ctx) {
   const org = db.prepare('SELECT id, name, timezone FROM organizations WHERE id = ?').get(ctx.organizationId);
@@ -55,7 +56,14 @@ function getDashboard(db, ctx) {
         GROUP BY u.id ORDER BY m.id`
     ).all(todayDate, ctx.organizationId);
   }
-  return { organization: org, me: { id: ctx.actor.id, displayName: me.displayName, role: ctx.actor.role }, today: todayDate, work, agency, team, workload, aiPending: aiplans.pendingCount(db, ctx), qaWaiting: qa.waitingCount(db, ctx) };
+  // This week's capacity for each person: planned and logged hours, utilization and overload warnings (Managers and above).
+  let weekCapacity = null;
+  if (workload) {
+    weekCapacity = capacity.workloadCapacity(db, ctx).weeks[0];
+    const by = new Map(weekCapacity.people.map((p) => [p.userId, p]));
+    workload = workload.map((w) => { const c = by.get(w.id); return c ? { ...w, plannedHours: c.plannedHours, loggedHours: c.loggedHours, utilizationPercent: c.utilizationPercent, capacityStatus: c.status } : w; });
+  }
+  return { organization: org, me: { id: ctx.actor.id, displayName: me.displayName, role: ctx.actor.role }, today: todayDate, work, agency, team, workload, capacity: weekCapacity, aiPending: aiplans.pendingCount(db, ctx), qaWaiting: qa.waitingCount(db, ctx) };
 }
 
 module.exports = { getDashboard };

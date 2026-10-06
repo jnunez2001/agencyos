@@ -63,6 +63,7 @@ export async function openTask(session, taskId, onChanged) {
       h('dt', {}, 'Due'), h('dd', {}, task.dueDate ? h('span', { class: task.isOverdue ? 'due overdue' : '' }, `${formatDay(task.dueDate)}${task.isOverdue ? ' (overdue)' : ''}`) : 'No date'),
       h('dt', {}, 'Priority'), h('dd', {}, priorityPill(task.priority)),
       h('dt', {}, 'Estimate'), h('dd', {}, task.estimateHours == null ? 'None' : `${task.estimateHours} hours`),
+      task.loggedHours != null ? [h('dt', {}, 'Time logged'), h('dd', {}, h('span', { class: task.estimateHours != null && task.loggedHours > task.estimateHours ? 'due overdue' : '' }, `${task.loggedHours} hours${task.estimateHours != null ? ` of ${task.estimateHours} estimated` : ''}`))] : null,
       task.goalTitle ? [h('dt', {}, 'Goal'), h('dd', {}, task.goalInherited ? `${task.goalTitle} (from the project)` : task.goalTitle)] : null);
     const error = h('div', { class: 'error', role: 'alert' });
     const status = selectField('Status', STATUSES.map((s) => [s, STATUS_LABEL[s]]), task.status, { name: 'status', disabled: !task.canChangeStatus });
@@ -93,7 +94,7 @@ export async function openTask(session, taskId, onChanged) {
       ? h('button', { class: 'btn btn-primary', type: 'button', onclick: () => { close(); import('./qa.js').then((m) => m.openReview(session, task.id, onChanged)).catch((e) => alert(e.message)); } }, 'Review')
       : null;
     return h('div', { class: 'sheet-body' },
-      h('div', { class: 'row-between' }, statusPill(task.status), task.canEdit && h('button', { class: 'btn', type: 'button', onclick: () => { close(); openTaskForm(session, { task }, onChanged).catch((e) => alert(e.message)); } }, 'Edit')),
+      h('div', { class: 'row-between' }, statusPill(task.status), h('div', { class: 'foot-actions' }, session.can['time.log'] && h('button', { class: 'btn', type: 'button', onclick: () => { close(); import('./time.js').then((m) => m.openEntryForm(session, { taskId: task.id }, onChanged)).catch((e) => alert(e.message)); } }, 'Log time'), task.canEdit && h('button', { class: 'btn', type: 'button', onclick: () => { close(); openTaskForm(session, { task }, onChanged).catch((e) => alert(e.message)); } }, 'Edit'))),
       task.description && h('p', { class: 'prose' }, task.description),
       facts, sopBlock(session, task), status.el, h('div', { class: 'sheet-actions left' }, submit, review), error, qaBlock(task),
       h('h3', { class: 'section-title' }, 'Comments'), comments, form);
