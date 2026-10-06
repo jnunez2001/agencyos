@@ -71,6 +71,7 @@ function setupTab(session, rerender) {
       h('ol', { class: 'steps' }, step('In claude.ai open Settings, then Connectors, then Add custom connector.'), step('Name it AgencyOS and paste the address above.'), step('Click Connect, sign in here if asked, then choose an access level and Approve.'))),
     h('section', { class: 'panel' },
       h('div', { class: 'panel-head' }, h('h2', {}, 'Claude Code and other agents')),
+      h('p', { class: 'notice-strong' }, 'Paste the prompt only into Claude Code or an agent running on your computer. Never into a claude.ai chat: it contains your key.'),
       access.el, help, error, h('div', { class: 'sheet-actions' }, create), result),
     h('section', { class: 'panel' },
       h('div', { class: 'panel-head' }, h('h2', {}, 'Any other MCP client')),
