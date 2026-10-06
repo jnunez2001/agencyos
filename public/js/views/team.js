@@ -1,20 +1,7 @@
 // Joshua Nunez
 import { h, icon, openSheet } from '../dom.js';
 import { api } from '../api.js';
-import { avatar, rolePill, field, selectField, toggleSwitch, tempPassword, ROLE_LABEL, DAY_LABEL } from '../ui.js';
-
-// A sheet that shows a failure from the server in place, and keeps the button usable.
-function sheetForm(fields, label, submit, close, extra) {
-  const error = h('div', { class: 'error', role: 'alert' });
-  const save = h('button', { class: 'btn btn-primary', type: 'submit' }, label);
-  const form = h('form', { class: 'sheet-body', onsubmit: async (e) => {
-    e.preventDefault();
-    error.textContent = '';
-    save.disabled = true;
-    try { await submit(); close(); } catch (err) { error.textContent = err.message; save.disabled = false; }
-  } }, fields.map((f) => f.el || f), error, extra, h('div', { class: 'sheet-actions' }, h('button', { class: 'btn', type: 'button', onclick: () => close() }, 'Cancel'), save));
-  return form;
-}
+import { avatar, rolePill, field, selectField, toggleSwitch, tempPassword, sheetForm, ROLE_LABEL, DAY_LABEL } from '../ui.js';
 
 export function openAddMember(session, onChanged) {
   openSheet('Add a team member', (close) => {

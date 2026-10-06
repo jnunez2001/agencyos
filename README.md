@@ -6,17 +6,19 @@ The full product plan is in [docs/blueprint.md](docs/blueprint.md). It is the so
 
 ## Status
 
-Phase 1 (foundation) is built: setup, login, organizations, five roles, the team, employee profiles, the activity log and the app shell. Clients, projects and tasks are next.
+Phases 1 and 2 are built. Phase 1: setup, login, organizations, five roles, the team, employee profiles and the activity log. Phase 2: clients with contacts, projects, tasks with comments, list and board views, and a dashboard with my work, agency totals and team workload. SOPs, QA, calendar, time tracking and reports are next.
 
 ## Run it on your Mac
 
 ```bash
 npm install
-npm run demo:seed   # a small demo agency (josh, rayne, mark, sarah, cole)
+npm run demo:seed   # a small demo agency (josh, rayne, mark, sarah, cole) with clients, projects and tasks
 npm run demo        # http://localhost:3200
 ```
 
 The demo password is in `scripts/seed-demo.js`. Demo data lives in `data-demo/`, which is not committed.
+
+To reseed the demo from scratch, delete the `data-demo` folder first.
 
 To start with an empty agency instead, run `npm start` and open http://localhost:3200 to create it.
 

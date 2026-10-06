@@ -9,19 +9,15 @@ import { teamView } from './views/team.js';
 import { profileView } from './views/profile.js';
 import { settingsView } from './views/settings.js';
 import { activityView } from './views/activity.js';
+import { tasksView } from './views/tasks.js';
+import { projectsView } from './views/projects.js';
+import { clientsView } from './views/clients.js';
+import { visibleNav, bottomNav } from './nav.js';
 
 const root = document.getElementById('app');
 let session = null;
 
-// Only the modules that exist show up. A person sees only what their role may use.
-const NAV = [
-  { key: 'dashboard', label: 'Dashboard', icon: 'dashboard', show: () => true },
-  { key: 'team', label: 'Team', icon: 'team', show: (s) => s.can['members.list'] },
-  { key: 'activity', label: 'Activity', icon: 'activity', show: (s) => s.can['activity.view'] },
-  { key: 'settings', label: 'Settings', icon: 'settings', show: (s) => s.can['org.update'] },
-];
-
-const VIEWS = { dashboard: dashboardView, team: teamView, activity: activityView, settings: settingsView, profile: profileView };
+const VIEWS = { dashboard: dashboardView, tasks: tasksView, projects: projectsView, clients: clientsView, team: teamView, activity: activityView, settings: settingsView, profile: profileView };
 
 function currentTheme() { return document.documentElement.getAttribute('data-theme') || 'light'; }
 function toggleTheme() {
@@ -44,17 +40,18 @@ async function signOut() {
   boot();
 }
 
-function routeKey() {
-  const key = location.hash.replace(/^#\/?/, '').split('/')[0] || 'dashboard';
-  const allowed = [...NAV.filter((n) => n.show(session)).map((n) => n.key), 'profile'];
-  if (allowed.includes(key)) return key;
+// '#/projects/12' is the projects screen with the parameter '12'.
+function route() {
+  const [key, param] = location.hash.replace(/^#\/?/, '').split('/');
+  const allowed = [...visibleNav(session).map((n) => n.key), 'profile'];
+  if (allowed.includes(key || 'dashboard')) return { key: key || 'dashboard', param: param || '' };
   // A screen this person may not use: show the dashboard and fix the address so Back does not loop.
   history.replaceState(null, '', '#/dashboard');
-  return 'dashboard';
+  return { key: 'dashboard', param: '' };
 }
 
 function shell(key, main) {
-  const items = NAV.filter((n) => n.show(session));
+  const items = visibleNav(session);
   const link = (n, active) => h('a', { class: `nav-link${active ? ' active' : ''}`, href: `#/${n.key}`, 'aria-current': active ? 'page' : null }, icon(n.icon), h('span', {}, n.label));
   const me = { id: session.user.id, displayName: session.user.displayName };
   return h('div', { class: 'shell' },
@@ -73,7 +70,7 @@ function shell(key, main) {
           h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Toggle dark mode', onclick: toggleTheme }, icon(currentTheme() === 'dark' ? 'sun' : 'moon')),
           h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Sign out', onclick: signOut }, icon('logout')))),
       main),
-    h('nav', { class: 'bottom-nav', 'aria-label': 'Main' }, [...items.map((n) => link(n, n.key === key)),
+    h('nav', { class: 'bottom-nav', 'aria-label': 'Main' }, [...bottomNav(session).map((n) => link(n, n.key === key)),
       h('a', { class: `nav-link${key === 'profile' ? ' active' : ''}`, href: '#/profile', 'aria-current': key === 'profile' ? 'page' : null }, icon('user'), h('span', {}, 'Me'))]));
 }
 
@@ -81,10 +78,10 @@ let renderSeq = 0;
 async function render() {
   if (!session) return;
   const seq = ++renderSeq;
-  const key = routeKey();
+  const { key, param } = route();
   const main = h('main', { class: 'main' });
   try {
-    main.append(await VIEWS[key](session, { rerender: render, refresh: async () => { await refreshSession(); await render(); } }));
+    main.append(await VIEWS[key](session, { param, rerender: render, refresh: async () => { await refreshSession(); await render(); } }));
   } catch (err) {
     if (err.status === 401) return boot();
     if (err.code === 'must_change_password') return boot();

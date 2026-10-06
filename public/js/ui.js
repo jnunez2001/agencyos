@@ -1,6 +1,6 @@
 // Joshua Nunez
 // Small shared pieces: avatars, role names, labels, and form helpers.
-import { h } from './dom.js';
+import { h, openSheet } from './dom.js';
 
 export const ROLE_LABEL = { owner: 'Owner', admin: 'Admin', manager: 'Manager', employee: 'Employee', contractor: 'Contractor' };
 export const DAY_LABEL = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -62,3 +62,57 @@ export function formatWhen(iso) {
   if (secs < 86400) return `${Math.floor(secs / 3600)} h ago`;
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
 }
+
+export const STATUS_LABEL = { todo: 'To do', in_progress: 'In progress', review: 'In review', done: 'Done' };
+export const PRIORITY_LABEL = { low: 'Low', normal: 'Normal', high: 'High', urgent: 'Urgent' };
+export const PROJECT_STATUS_LABEL = { planning: 'Planning', active: 'Active', on_hold: 'On hold', completed: 'Completed', archived: 'Archived' };
+export const CLIENT_STATUS_LABEL = { active: 'Active', paused: 'Paused', archived: 'Archived' };
+
+export const pill = (kind, value, label) => h('span', { class: `pill ${kind}-${value}` }, label);
+export const statusPill = (s) => pill('st', s, STATUS_LABEL[s] || s);
+export const priorityPill = (p) => pill('pr', p, PRIORITY_LABEL[p] || p);
+
+// "Oct 5", or "Oct 5, 2027" when it is not this year. Takes a YYYY-MM-DD date.
+export function formatDay(date) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date || '');
+  if (!m) return '';
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: d.getFullYear() === new Date().getFullYear() ? undefined : 'numeric' });
+}
+
+// The due date of a task, red when it is overdue. Nothing when there is no date.
+export function dueLabel(task) {
+  if (!task.dueDate) return null;
+  return h('span', { class: `due${task.isOverdue ? ' overdue' : ''}` }, `${task.isOverdue ? 'Overdue, ' : 'Due '}${formatDay(task.dueDate)}`);
+}
+
+export function textareaField(label, attrs = {}, value = '') {
+  const input = h('textarea', { class: 'input area', rows: 4, ...attrs }, value);
+  return { input, el: h('label', { class: 'field' }, h('span', { class: 'label' }, label), input) };
+}
+
+// A sheet form that shows a failure from the server in place, and keeps the button usable.
+export function sheetForm(fields, label, submit, close, extra) {
+  const error = h('div', { class: 'error', role: 'alert' });
+  const save = h('button', { class: 'btn btn-primary', type: 'submit' }, label);
+  return h('form', { class: 'sheet-body', onsubmit: async (e) => {
+    e.preventDefault();
+    error.textContent = '';
+    save.disabled = true;
+    try { await submit(); close(); } catch (err) { error.textContent = err.message; save.disabled = false; }
+  } }, fields.map((f) => f.el || f), error, extra, h('div', { class: 'sheet-actions' }, h('button', { class: 'btn', type: 'button', onclick: () => close() }, 'Cancel'), save));
+}
+
+// A first click arms the button, the second confirms. No browser dialog needed.
+export function confirmButton(label, confirmLabel, action) {
+  const b = h('button', { class: 'btn btn-danger', type: 'button' }, label);
+  let armed = false;
+  b.addEventListener('click', async () => {
+    if (!armed) { armed = true; b.textContent = confirmLabel; return; }
+    b.disabled = true;
+    await action();
+  });
+  return b;
+}
+
+export { openSheet };

@@ -7,6 +7,10 @@ const { openDb } = require('../server/db');
 const orgs = require('../server/services/organizations');
 const members = require('../server/services/members');
 const profiles = require('../server/services/profiles');
+const clients = require('../server/services/clients');
+const projects = require('../server/services/projects');
+const tasks = require('../server/services/tasks');
+const { todayIn, addDays } = require('../server/services/dates');
 
 const PASSWORD = 'demo-password-123';
 
@@ -31,5 +35,30 @@ const PASSWORD = 'demo-password-123';
   }
   // The demo people have already chosen their own passwords.
   db.prepare('UPDATE users SET must_change_password = 0').run();
+
+  // Clients, projects and tasks, with dates counted from today so the dashboard always has overdue and upcoming work.
+  const id = (u) => db.prepare('SELECT id FROM users WHERE username = ?').get(u).id;
+  const today = todayIn('Asia/Manila');
+  const day = (n) => addDays(today, n);
+  const acme = clients.createClient(db, owner, { name: 'Acme Dental', industry: 'Dental', website: 'https://acme-dental.example', notes: 'Prefers updates by email on Fridays.' });
+  const bloom = clients.createClient(db, owner, { name: 'Bloom Florist', industry: 'Retail', website: 'https://bloom.example' });
+  clients.createClient(db, owner, { name: 'Harbor Law', industry: 'Legal', status: 'paused' });
+  clients.addContact(db, owner, acme.id, { name: 'Dr. Ana Lee', email: 'ana@acme-dental.example', roleTitle: 'Owner', isPrimary: true });
+  clients.addContact(db, owner, acme.id, { name: 'Front desk', phone: '555 0100' });
+  clients.addContact(db, owner, bloom.id, { name: 'Mia Torres', email: 'mia@bloom.example', roleTitle: 'Manager', isPrimary: true });
+  const site = projects.createProject(db, owner, { clientId: acme.id, name: 'New website', status: 'active', description: 'Rebuild the practice website with online booking.', startDate: day(-14), dueDate: day(30), managerId: id('mark') });
+  const seo = projects.createProject(db, owner, { clientId: acme.id, name: 'Local SEO', status: 'active', description: 'Google Business Profile and citations.', startDate: day(-30), dueDate: day(60), managerId: id('mark') });
+  const shop = projects.createProject(db, owner, { clientId: bloom.id, name: 'Online shop', status: 'planning', startDate: day(7), dueDate: day(75), managerId: id('rayne') });
+  const T = (project, title, extra) => tasks.createTask(db, owner, { projectId: project.id, title, ...extra });
+  T(site, 'Homepage copy', { assigneeId: id('cole'), priority: 'high', status: 'in_progress', dueDate: day(2), estimateHours: 6, description: 'Draft copy for the home, services and about pages.' });
+  T(site, 'Booking form wireframe', { assigneeId: id('mark'), priority: 'urgent', dueDate: day(-2), estimateHours: 8 });
+  T(site, 'Sitemap and navigation', { assigneeId: id('mark'), status: 'done', dueDate: day(-7), estimateHours: 3 });
+  T(site, 'Photo shoot schedule', { assigneeId: id('rayne'), dueDate: day(5), estimateHours: 2 });
+  T(seo, 'Claim Google Business Profile', { assigneeId: id('sarah'), status: 'review', dueDate: day(1), estimateHours: 2 });
+  T(seo, 'Citation clean-up', { assigneeId: id('sarah'), dueDate: day(10), estimateHours: 14, priority: 'high' });
+  T(seo, 'Keyword research', { assigneeId: id('sarah'), dueDate: day(-1), estimateHours: 6 });
+  T(seo, 'Monthly report template', { priority: 'low' });
+  T(shop, 'Product list from client', { assigneeId: id('rayne'), dueDate: day(8), estimateHours: 2 });
+  T(shop, 'Payment provider options', { assigneeId: id('mark'), dueDate: day(12), estimateHours: 5 });
   console.log(`Demo agency ready in ${dir}. Sign in as josh, rayne, mark, sarah or cole. The demo password is in scripts/seed-demo.js.`);
 })();

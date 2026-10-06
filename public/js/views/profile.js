@@ -1,7 +1,8 @@
 // Joshua Nunez
-import { h } from '../dom.js';
+import { h, icon } from '../dom.js';
 import { api } from '../api.js';
 import { avatar, rolePill, field, DAY_LABEL } from '../ui.js';
+import { overflowNav } from '../nav.js';
 
 function timezones() {
   try { return Intl.supportedValuesOf('timeZone'); } catch { return ['Asia/Manila', 'UTC']; }
@@ -62,5 +63,6 @@ export async function profileView(session, { rerender }) {
   return h('div', { class: 'page narrow' },
     h('div', { class: 'page-head' }, h('h1', { class: 'page-title' }, 'My profile')),
     h('section', { class: 'panel member-head' }, avatar({ id: p.userId, displayName: p.displayName }, 'lg'), h('div', {}, h('strong', {}, p.displayName), h('div', { class: 'muted' }, `@${p.username}`), rolePill(p.role))),
+    overflowNav(session).length > 0 && h('section', { class: 'panel list only-mobile' }, overflowNav(session).map((n) => h('a', { class: 'row', href: `#/${n.key}` }, icon(n.icon), h('div', { class: 'grow' }, h('div', { class: 'row-title' }, n.label)), icon('chevron')))),
     form, passwordCard(session, rerender));
 }

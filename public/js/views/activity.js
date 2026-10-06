@@ -12,19 +12,32 @@ const SENTENCE = {
   'member.reset_password': 'reset a password',
   'profile.update': 'updated a profile',
   'password.change': 'changed their password',
+  'client.create': 'added a client',
+  'client.update': 'changed a client',
+  'contact.create': 'added a client contact',
+  'contact.update': 'changed a client contact',
+  'contact.delete': 'removed a client contact',
+  'project.create': 'added a project',
+  'project.update': 'changed a project',
+  'task.create': 'added a task',
+  'task.update': 'changed a task',
+  'task.delete': 'deleted a task',
+  'task.comment': 'commented on a task',
   'login.success': 'signed in',
   'login.failed': 'had a failed sign-in',
   'login.locked': 'was locked out after too many tries',
 };
 
-const FIELD = { role: 'Role', displayName: 'Name', isActive: 'Active', name: 'Name', timezone: 'Timezone', username: 'Username', jobTitle: 'Job title', department: 'Department', workDays: 'Working days', workStart: 'Start', workEnd: 'End', weeklyCapacityHours: 'Capacity' };
-const show = (v) => (Array.isArray(v) ? v.join(', ') : typeof v === 'boolean' ? (v ? 'yes' : 'no') : String(v));
+const FIELD = { role: 'Role', displayName: 'Name', isActive: 'Active', name: 'Name', timezone: 'Timezone', username: 'Username', jobTitle: 'Job title', department: 'Department', workDays: 'Working days', title: 'Title', description: 'Description', status: 'Status', priority: 'Priority', dueDate: 'Due date', startDate: 'Start date', estimateHours: 'Estimate', website: 'Website', industry: 'Industry', notes: 'Notes', email: 'Email', phone: 'Phone', roleTitle: 'Role', isPrimary: 'Primary', assigneeId: 'Assignee', managerId: 'Manager', projectId: 'Project', clientId: 'Client', workStart: 'Start', workEnd: 'End', weeklyCapacityHours: 'Capacity' };
+const show = (v) => (v == null ? 'none' : Array.isArray(v) ? v.join(', ') : typeof v === 'boolean' ? (v ? 'yes' : 'no') : String(v));
 
-// "Role: employee to manager" for each field that changed.
+const LONG = new Set(['description', 'notes']); // long text and ids are not worth printing
+const ID = new Set(['assigneeId', 'managerId', 'projectId', 'clientId']);
+// "Role: employee to manager" for each field that changed. Ids carry no meaning on their own, so a new record skips them.
 function changes(row) {
   const after = row.after || {};
   const before = row.before || {};
-  return Object.keys(after).filter((k) => FIELD[k]).map((k) => (k in before ? `${FIELD[k]}: ${show(before[k])} to ${show(after[k])}` : `${FIELD[k]}: ${show(after[k])}`));
+  return Object.keys(after).filter((k) => FIELD[k] && !(ID.has(k) && !row.before)).map((k) => (LONG.has(k) || ID.has(k) ? `${FIELD[k]} changed` : k in before ? `${FIELD[k]}: ${show(before[k])} to ${show(after[k])}` : `${FIELD[k]}: ${show(after[k])}`));
 }
 
 let filter = { actorId: '', action: '' };

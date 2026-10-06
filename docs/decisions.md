@@ -26,3 +26,11 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 - Team members get a temporary password from an Owner or Admin and must change it at first sign-in. No email is sent.
 - The sidebar shows only the modules that exist. The Client role waits for the client portal.
 - Not reachable from the internet yet. Hosting is still undecided. Before it is, set `SETUP_TOKEN`.
+
+## 2026-10-06: Phase 2 built
+
+- Clients, contacts, projects, tasks and comments, with list and board views and a working dashboard. 98 tests.
+- Employees and Contractors change only the status of their own tasks. A Contractor sees only tasks assigned to them, and everything else is "not found".
+- Clients and projects are archived, never deleted. A task can be deleted and the activity log keeps what it was.
+- "Today" and "overdue" use the agency's timezone.
+- Spec: `docs/specs/2026-10-06-phase-2-core-operations.md`.
