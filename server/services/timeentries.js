@@ -10,6 +10,8 @@ const projects = require('./projects');
 const tasks = require('./tasks');
 const { today } = require('./dates');
 const perms = require('./permissions');
+const notifications = require('./notifications');
+const retainers = require('./retainers');
 
 const TYPES = ['billable', 'non_billable', 'internal', 'meeting', 'training', 'admin'];
 const STATUSES = ['draft', 'submitted', 'approved', 'rejected', 'locked'];
@@ -310,6 +312,8 @@ function decide(db, ctx, id, status, note) {
     if (status === 'rejected' && !text) throw new ServiceError(400, 'Say why it is rejected so the person can fix it');
     db.prepare("UPDATE time_entries SET status = ?, reviewer_id = ?, reviewed_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), review_note = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE organization_id = ? AND id = ?").run(status, ctx.actor.id, text, ctx.organizationId, row.id);
     logActivity(db, { ...logCtx(ctx), action: status === 'approved' ? 'time.approve' : 'time.reject', objectType: 'time_entry', objectId: row.id, before: { status: 'submitted' }, after: { status, ...(text ? { reviewNote: text } : {}) } });
+    if (status === 'rejected') notifications.notify(db, ctx, { userIds: row.userId, type: 'time_rejected', title: `Time rejected: ${row.date}`, body: text, link: '#/time', objectType: 'time_entry', objectId: row.id, dedupeKey: `time_rejected:${row.id}` });
+    if (status === 'approved' && row.timeType === 'billable' && row.clientId) retainers.notifyUsage(db, ctx, row.clientId, row.date);
     return getEntry(db, ctx, row.id);
   })();
 }

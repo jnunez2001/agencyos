@@ -7,6 +7,7 @@ const { cleanOptional, cleanText } = require('./validate');
 const perms = require('./permissions');
 const tasks = require('./tasks');
 const qarecords = require('./qarecords');
+const notifications = require('./notifications');
 
 const logCtx = (ctx) => ({ organizationId: ctx.organizationId, actorUserId: ctx.actor.id, source: ctx.source || 'web', ip: ctx.ip || null });
 const need = (ctx) => { if (!perms.can(ctx.actor.role, 'qa.review')) throw new ServiceError(403, 'Not allowed'); };
@@ -64,6 +65,7 @@ function reviewTask(db, ctx, taskId, input = {}) {
     db.prepare(`UPDATE tasks SET status = ?, completed_at = ${approved ? "strftime('%Y-%m-%dT%H:%M:%fZ','now')" : 'NULL'}, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE organization_id = ? AND id = ?`)
       .run(approved ? 'done' : 'changes', ctx.organizationId, task.id);
     logActivity(db, { ...logCtx(ctx), action: approved ? 'qa.approve' : 'qa.request_changes', objectType: 'task', objectId: task.id, before: { status: 'review' }, after: { status: approved ? 'done' : 'changes' } });
+    if (!approved) notifications.notify(db, ctx, { userIds: task.assigneeId, type: 'qa_changes', title: `Changes requested on ${task.title}`, body: comments.slice(0, 200), link: `#/projects/${task.projectId}`, objectType: 'task', objectId: task.id, dedupeKey: `qa_changes:${task.id}` });
     return tasks.detail(db, ctx, task.id);
   })();
 }

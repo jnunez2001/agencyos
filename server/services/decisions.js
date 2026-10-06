@@ -6,14 +6,15 @@ const { cleanText, cleanOptional, cleanEnum, cleanDate, diff } = require('./vali
 const clients = require('./clients');
 const projects = require('./projects');
 const perms = require('./permissions');
+const notifications = require('./notifications');
 
 const STATUSES = ['active', 'reversed'];
-const FIELDS = ['title', 'details', 'decidedOn', 'status', 'clientId', 'projectId'];
+const FIELDS = ['title', 'details', 'decidedOn', 'status', 'clientId', 'projectId', 'peopleInvolved'];
 const logCtx = (ctx) => ({ organizationId: ctx.organizationId, actorUserId: ctx.actor.id, source: ctx.source || 'web', ip: ctx.ip || null });
 const need = (ctx, action) => { if (!perms.can(ctx.actor.role, action)) throw new ServiceError(403, 'Not allowed'); };
 
 const SELECT = `
-  SELECT d.id, d.title, d.details, d.decided_on AS decidedOn, d.status, d.client_id AS clientId, c.name AS clientName, d.project_id AS projectId, p.name AS projectName,
+  SELECT d.id, d.title, d.details, d.people_involved AS peopleInvolved, d.decided_on AS decidedOn, d.status, d.client_id AS clientId, c.name AS clientName, d.project_id AS projectId, p.name AS projectName,
          d.source_note_id AS sourceNoteId, n.title AS sourceNoteTitle, d.created_by AS createdBy, cu.display_name AS createdByName, d.created_at AS createdAt, d.updated_at AS updatedAt
     FROM decisions d
     LEFT JOIN clients c ON c.id = d.client_id AND c.organization_id = d.organization_id
@@ -52,15 +53,23 @@ function cleanLinks(db, ctx, clientId, projectId) {
   return { clientId: client ? client.id : null, projectId: project ? project.id : null };
 }
 
+// The client's account owner is told about a decision that is made or reversed (never the person who did it).
+function tellOwner(db, ctx, { id, clientId, title }, verb) {
+  if (!clientId) return;
+  const owner = db.prepare('SELECT account_owner_id AS id FROM clients WHERE organization_id = ? AND id = ?').get(ctx.organizationId, clientId);
+  notifications.notify(db, ctx, { userIds: [owner && owner.id], type: `decision_${verb}`, title: `Decision ${verb}: ${title}`, link: '#/meetings/decisions', objectType: 'decision', objectId: id, dedupeKey: `decision_${verb}:${id}` });
+}
+
 function createDecision(db, ctx, input = {}, { sourceNoteId = null } = {}) {
   need(ctx, 'decisions.manage');
   return db.transaction(() => {
     const decidedOn = cleanDate(input.decidedOn, 'Decided on');
     if (!decidedOn) throw new ServiceError(400, 'Decided on is required');
-    const next = { title: cleanText(input.title, 'Title', 1, 200), details: cleanOptional(input.details, 'Details', 10000), decidedOn, status: input.status === undefined ? 'active' : cleanEnum(input.status, STATUSES, 'status'), ...cleanLinks(db, ctx, input.clientId, input.projectId) };
-    const id = Number(db.prepare('INSERT INTO decisions (organization_id, client_id, project_id, title, details, decided_on, status, source_note_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(ctx.organizationId, next.clientId, next.projectId, next.title, next.details, next.decidedOn, next.status, sourceNoteId, ctx.actor.id).lastInsertRowid);
+    const next = { title: cleanText(input.title, 'Title', 1, 200), details: cleanOptional(input.details, 'Details', 10000), peopleInvolved: cleanOptional(input.peopleInvolved, 'People involved', 500), decidedOn, status: input.status === undefined ? 'active' : cleanEnum(input.status, STATUSES, 'status'), ...cleanLinks(db, ctx, input.clientId, input.projectId) };
+    const id = Number(db.prepare('INSERT INTO decisions (organization_id, client_id, project_id, title, details, people_involved, decided_on, status, source_note_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(ctx.organizationId, next.clientId, next.projectId, next.title, next.details, next.peopleInvolved, next.decidedOn, next.status, sourceNoteId, ctx.actor.id).lastInsertRowid);
     logActivity(db, { ...logCtx(ctx), action: 'decision.create', objectType: 'decision', objectId: id, after: { title: next.title, decidedOn: next.decidedOn, ...(sourceNoteId ? { sourceNoteId } : {}) } });
+    if (next.status === 'active') tellOwner(db, ctx, { id, clientId: next.clientId, title: next.title }, 'made');
     return getDecision(db, ctx, id);
   })();
 }
@@ -72,6 +81,7 @@ function updateDecision(db, ctx, id, patch = {}) {
     const next = { ...current };
     if (patch.title !== undefined) next.title = cleanText(patch.title, 'Title', 1, 200);
     if (patch.details !== undefined) next.details = cleanOptional(patch.details, 'Details', 10000);
+    if (patch.peopleInvolved !== undefined) next.peopleInvolved = cleanOptional(patch.peopleInvolved, 'People involved', 500);
     if (patch.decidedOn !== undefined) { next.decidedOn = cleanDate(patch.decidedOn, 'Decided on'); if (!next.decidedOn) throw new ServiceError(400, 'Decided on is required'); }
     if (patch.status !== undefined) next.status = cleanEnum(patch.status, STATUSES, 'status');
     if (patch.clientId !== undefined || patch.projectId !== undefined) {
@@ -81,9 +91,10 @@ function updateDecision(db, ctx, id, patch = {}) {
     }
     const d = diff(current, next, FIELDS);
     if (!d.changed) return shape(ctx, current);
-    db.prepare("UPDATE decisions SET title = ?, details = ?, decided_on = ?, status = ?, client_id = ?, project_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE organization_id = ? AND id = ?")
-      .run(next.title, next.details, next.decidedOn, next.status, next.clientId, next.projectId, ctx.organizationId, current.id);
+    db.prepare("UPDATE decisions SET title = ?, details = ?, people_involved = ?, decided_on = ?, status = ?, client_id = ?, project_id = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE organization_id = ? AND id = ?")
+      .run(next.title, next.details, next.peopleInvolved, next.decidedOn, next.status, next.clientId, next.projectId, ctx.organizationId, current.id);
     logActivity(db, { ...logCtx(ctx), action: 'decision.update', objectType: 'decision', objectId: current.id, before: d.before, after: d.after });
+    if (d.after.status === 'reversed') tellOwner(db, ctx, { id: current.id, clientId: next.clientId, title: next.title }, 'reversed');
     return getDecision(db, ctx, id);
   })();
 }

@@ -7,6 +7,7 @@ const { ServiceError } = require('./errors');
 const { cleanText, cleanOptional, cleanEnum, diff } = require('./validate');
 const perms = require('./permissions');
 const sops = require('./sops');
+const notifications = require('./notifications');
 
 const STATUSES = ['identified', 'needs_review', 'approved', 'in_progress', 'testing', 'published', 'rejected'];
 const PRIORITIES = ['low', 'normal', 'high', 'urgent'];
@@ -21,6 +22,12 @@ const need = (ctx, action) => { if (!perms.can(ctx.actor.role, action)) throw ne
 const manages = (ctx) => perms.can(ctx.actor.role, 'sopchanges.manage');
 const seesSops = (ctx) => perms.can(ctx.actor.role, 'sops.view');
 const isAi = (ctx) => ctx.source === 'ai';
+
+// A change that reaches review is something a manager must look at.
+function tellReviewers(db, ctx, id, title, sopId) {
+  const sop = db.prepare('SELECT title FROM sops WHERE organization_id = ? AND id = ?').get(ctx.organizationId, sopId);
+  notifications.notify(db, ctx, { userIds: notifications.peopleWith(db, ctx.organizationId, 'sopchanges.manage'), type: 'sopchange_review', title: `SOP change to review: ${title}`, body: sop ? `On ${sop.title}` : '', link: '#/sops/changes', objectType: 'sop_change_request', objectId: id, dedupeKey: `sopchange_review:${id}` });
+}
 
 const SELECT = `
   SELECT r.id, r.sop_id AS sopId, s.title AS sopTitle, s.status AS sopStatus, r.title, r.details, r.proposed_text AS proposedText, r.proposed_content_json AS proposedContentJson,
@@ -138,6 +145,7 @@ function createChange(db, ctx, input = {}) {
       'INSERT INTO sop_change_requests (organization_id, sop_id, title, details, proposed_text, proposed_content_json, priority, status, source_type, source_id, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
     ).run(ctx.organizationId, sop.id, next.title, next.details, next.proposedText, proposed ? JSON.stringify(proposed) : null, next.priority, status, source.sourceType, source.sourceId, ctx.actor.id).lastInsertRowid);
     logActivity(db, { ...logCtx(ctx), action: 'sopchange.create', objectType: 'sop_change_request', objectId: id, after: { title: next.title, sopId: sop.id, status, priority: next.priority, ...(source.sourceType ? { source: `${source.sourceType} ${source.sourceId}` } : {}) } });
+    if (status === 'needs_review') tellReviewers(db, ctx, id, next.title, sop.id);
     return shape(ctx, find(db, ctx, id), { full: true });
   })();
 }
@@ -177,6 +185,7 @@ function updateChange(db, ctx, id, patch = {}) {
       .run(next.title, next.details, next.proposedText, proposedJson, next.priority, next.status, next.rejectedReason,
         decided ? ctx.actor.id : row.reviewedBy, decided ? new Date().toISOString() : row.reviewedAt, ctx.organizationId, row.id);
     logActivity(db, { ...logCtx(ctx), action: 'sopchange.update', objectType: 'sop_change_request', objectId: row.id, before: d.before, after: d.after });
+    if (d.after.status === 'needs_review') tellReviewers(db, ctx, row.id, next.title, row.sopId);
     return shape(ctx, find(db, ctx, id), { full: true });
   })();
 }
@@ -197,6 +206,10 @@ function publishChange(db, ctx, id, input = {}) {
     db.prepare("UPDATE sop_change_requests SET status = 'published', published_version_id = ?, published_by = ?, published_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'), updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE organization_id = ? AND id = ?")
       .run(sop.versionId, ctx.actor.id, ctx.organizationId, row.id);
     logActivity(db, { ...logCtx(ctx), action: 'sopchange.publish', objectType: 'sop_change_request', objectId: row.id, before: { status: row.status }, after: { status: 'published', sopId: row.sopId, version: sop.version } });
+    // The people working to this SOP and its owner hear that a new version exists.
+    const working = db.prepare("SELECT DISTINCT assignee_id AS id FROM tasks WHERE organization_id = ? AND sop_id = ? AND status != 'done' AND assignee_id IS NOT NULL").all(ctx.organizationId, row.sopId).map((r) => r.id);
+    const sopRow = db.prepare('SELECT owner_id AS ownerId FROM sops WHERE organization_id = ? AND id = ?').get(ctx.organizationId, row.sopId);
+    notifications.notify(db, ctx, { userIds: [...working, sopRow && sopRow.ownerId], type: 'sop_published', title: `SOP updated: ${row.sopTitle}`, body: `Version ${sop.version} is published. ${row.title}`.slice(0, 300), link: `#/sops/${row.sopId}`, objectType: 'sop', objectId: row.sopId, dedupeKey: `sop_published:${row.id}` });
     return shape(ctx, find(db, ctx, id), { full: true });
   })();
 }

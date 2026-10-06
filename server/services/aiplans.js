@@ -23,7 +23,7 @@ const results = require('./results');
 const reports = require('./reports');
 
 const MAX_STEPS = 50;
-const REF_KEYS = ['clientId', 'projectId', 'taskId', 'sopId', 'goalId', 'noteId', 'id'];
+const REF_KEYS = ['clientId', 'projectId', 'taskId', 'sopId', 'goalId', 'noteId', 'requestId', 'id'];
 const NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;
 
 // Finalizing or reopening a note is a person's decision.

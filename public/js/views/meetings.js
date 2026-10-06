@@ -6,7 +6,8 @@ import { field, selectField, textareaField, sheetForm, confirmButton, pill, form
 import { tabBar, decisionsPage, followUpsPage } from './records.js';
 
 const STATUS_LABEL = { draft: 'Draft', final: 'Final' };
-const SECTION_LABEL = [['summary', 'Summary'], ['agenda', 'Agenda'], ['discussion', 'Discussion'], ['decisions', 'Decisions'], ['requests', 'Requests'], ['followUps', 'Follow-ups']];
+const SECTION_LABEL = [['purpose', 'Purpose'], ['summary', 'Summary'], ['agenda', 'Agenda'], ['importantContext', 'Important context'], ['discussion', 'Discussion'], ['decisions', 'Decisions'], ['requests', 'Requests'], ['followUps', 'Follow-ups'], ['risks', 'Risks'], ['sopImpact', 'SOP impact'], ['nextMeeting', 'Next meeting']];
+const SHORT_SECTIONS = ['purpose', 'nextMeeting'];
 const statusPill = (s) => pill('ns', s, STATUS_LABEL[s] || s);
 const filters = { status: '', clientId: '', q: '' };
 const decisionState = { status: '' };
@@ -22,7 +23,7 @@ export async function openNoteForm(session, { note, event } = {}, onSaved) {
     const dayOfEvent = event ? (event.allDay ? event.startsAt : (() => { const d = new Date(event.startsAt); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })()) : '';
     const date = field('Date', { name: 'meetingDate', type: 'date', required: true, value: base.meetingDate || dayOfEvent || new Date().toISOString().slice(0, 10) });
     const client = !event && !note?.eventId && clients.length ? selectField('Client', [['', 'No client'], ...clients.map((c) => [c.id, c.name])], base.clientId || '', { name: 'clientId' }) : null;
-    const sections = SECTION_LABEL.map(([key, label]) => textareaField(label, { name: key, maxlength: 20000, rows: key === 'discussion' ? 6 : 3 }, base[key] || ''));
+    const sections = SECTION_LABEL.map(([key, label]) => textareaField(label, { name: key, maxlength: key === 'discussion' ? 20000 : SHORT_SECTIONS.includes(key) ? 5000 : 10000, rows: key === 'discussion' ? 6 : 3 }, base[key] || ''));
     const transcript = textareaField('Transcript or rough notes (for your AI to read)', { name: 'transcript', maxlength: 100000, rows: 5 }, base.transcript || '');
     const status = note && manage ? selectField('Status', Object.entries(STATUS_LABEL), note.status, { name: 'status' }) : null;
     return sheetForm([title, date, client, ...sections, transcript, status], note ? 'Save' : 'Add notes', async () => {
