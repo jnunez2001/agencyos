@@ -285,6 +285,14 @@ a.row:hover { background: var(--hover); }
 .pill.sp-approved { background: #dcfce7; color: #166534; }
 .pill.sp-testing { background: #fef3c7; color: #92400e; }
 .pill.sp-deprecated { background: var(--hover); color: var(--muted); }
+.pill.sc-approved, .pill.sc-published { background: #dcfce7; color: #166534; }
+.pill.sc-needs_review, .pill.sc-testing { background: #fef3c7; color: #92400e; }
+.pill.sc-in_progress { background: #e0f2fe; color: #0369a1; }
+.pill.sc-rejected { background: #fee2e2; color: #b91c1c; }
+:root[data-theme="dark"] .pill.sc-approved, :root[data-theme="dark"] .pill.sc-published { background: #10321d; color: #86efac; }
+:root[data-theme="dark"] .pill.sc-needs_review, :root[data-theme="dark"] .pill.sc-testing { background: #3a2a0c; color: #fcd34d; }
+:root[data-theme="dark"] .pill.sc-in_progress { background: #0c2a3d; color: #7dd3fc; }
+:root[data-theme="dark"] .pill.sc-rejected { background: #3b1414; color: #fca5a5; }
 :root[data-theme="dark"] .pill.sp-approved { background: #10321d; color: #86efac; }
 :root[data-theme="dark"] .pill.sp-testing { background: #3a2a0c; color: #fcd34d; }
 .sop-block, .qa-block { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; }

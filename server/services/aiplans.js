@@ -16,6 +16,7 @@ const requests = require('./requests');
 const decisions = require('./decisions');
 const followups = require('./followups');
 const sops = require('./sops');
+const sopchanges = require('./sopchanges');
 const goals = require('./goals');
 const results = require('./results');
 const reports = require('./reports');
@@ -28,6 +29,8 @@ const NAME_PATTERN = /^[A-Za-z][A-Za-z0-9_]{0,30}$/;
 const noStatus = (a) => { if (a.status !== undefined) fail(403, 'AI cannot finalize or reopen meeting notes. A manager does that'); return a; };
 // Approving, rejecting or starting work on a client request is a person's decision.
 const noRequestVerdict = (a) => { if (['approved', 'rejected', 'in_progress'].includes(a.status)) fail(403, 'AI cannot approve, reject or start a client request. A manager decides'); return a; };
+// Approving, rejecting, starting, testing or publishing an SOP change is a person's decision.
+const noChangeVerdict = (a) => { if (['approved', 'rejected', 'in_progress', 'testing', 'published'].includes(a.status) || a.rejectedReason !== undefined) fail(403, 'AI cannot approve, reject, start, test or publish an SOP change. A manager decides'); return a; };
 const withId = (args, fn) => { const { id, ...rest } = args; return fn(id, rest); };
 
 // Everything an AI can do. Nothing here touches members, roles, passwords, keys or settings, and nothing deletes.
@@ -60,6 +63,8 @@ const ACTIONS = {
   create_sop: (db, ctx, a) => sops.createSop(db, ctx, a),
   update_sop: (db, ctx, a) => withId(a, (id, rest) => sops.updateSop(db, ctx, id, rest)),
   add_sop_version: (db, ctx, a) => withId(a, (id, rest) => sops.addVersion(db, ctx, id, rest)),
+  create_sop_change: (db, ctx, a) => sopchanges.createChange(db, ctx, noChangeVerdict(a)),
+  update_sop_change: (db, ctx, a) => withId(noChangeVerdict(a), (id, rest) => sopchanges.updateChange(db, ctx, id, rest)),
   create_tasks_from_sop: (db, ctx, a) => { const { sopId, ...rest } = a; return tasks.createTasksFromSop(db, ctx, sopId, rest); },
 };
 
@@ -171,6 +176,8 @@ function describe(db, organizationId, steps) {
       case 'create_sop': line = `Create SOP "${a.title}"${a.status ? ` (${a.status})` : ''}`; break;
       case 'update_sop': line = `Change SOP ${nameOf('sops', 'title', a.id)}: ${changed}`; break;
       case 'add_sop_version': line = `Add a new version to SOP ${nameOf('sops', 'title', a.id)}${a.changeNote ? `: ${trim(a.changeNote)}` : ''}`; break;
+      case 'create_sop_change': line = `Raise SOP change request "${a.title}" on SOP ${nameOf('sops', 'title', a.sopId)}`; break;
+      case 'update_sop_change': line = `Change SOP change request ${nameOf('sop_change_requests', 'title', a.id)}: ${changed}`; break;
       case 'create_tasks_from_sop': line = `Create ${a.mode === 'steps' ? 'a task for each step of' : 'a task from'} SOP ${nameOf('sops', 'title', a.sopId)} in ${nameOf('projects', 'name', a.projectId)}`; break;
       case 'add_comment': line = `Comment on ${nameOf('tasks', 'title', a.taskId)}: ${trim(a.body || '')}`; break;
       default: line = s.action;

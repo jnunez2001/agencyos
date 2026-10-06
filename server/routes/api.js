@@ -25,6 +25,7 @@ const oauth = require('../services/oauth');
 const { originOf } = require('../oauthRoutes');
 const sops = require('../services/sops');
 const qa = require('../services/qa');
+const sopchanges = require('../services/sopchanges');
 const services = require('../services/services');
 const goals = require('../services/goals');
 const results = require('../services/results');
@@ -258,6 +259,13 @@ module.exports = function apiRouter(db, { google = null } = {}) {
   r.post('/sops/:id/tasks', (req, res) => res.json(tasks.createTasksFromSop(db, ctxOf(req), idParam(req), req.body)));
   r.get('/qa', (req, res) => res.json(qa.listQueue(db, ctxOf(req))));
   r.post('/tasks/:id/qa', (req, res) => res.json(qa.reviewTask(db, ctxOf(req), idParam(req), req.body)));
+
+  // ---- SOP change requests ----
+  r.get('/sop-changes', (req, res) => res.json(sopchanges.listChanges(db, ctxOf(req), { status: req.query.status, sopId: req.query.sopId, priority: req.query.priority, mine: req.query.mine, q: req.query.q })));
+  r.post('/sop-changes', (req, res) => res.json(sopchanges.createChange(db, ctxOf(req), req.body)));
+  r.get('/sop-changes/:id', (req, res) => res.json(sopchanges.getChange(db, ctxOf(req), idParam(req))));
+  r.patch('/sop-changes/:id', (req, res) => res.json(sopchanges.updateChange(db, ctxOf(req), idParam(req), req.body)));
+  r.post('/sop-changes/:id/publish', (req, res) => res.json(sopchanges.publishChange(db, ctxOf(req), idParam(req), req.body)));
 
   r.get('/api-keys', (req, res) => res.json(apikeys.listKeys(db, ctxOf(req))));
   r.post('/api-keys', (req, res) => res.json(apikeys.createKey(db, ctxOf(req), req.body)));

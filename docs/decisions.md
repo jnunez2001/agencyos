@@ -128,3 +128,10 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 
 - Notifications are only about what a person must act on and never about their own action. A repeat folds into the unread one, the daily digest goes once a day, read ones are removed after 90 days. Spec: `docs/specs/2026-10-06-phase-15-notifications.md`.
 - Meeting intelligence uses the AI the person already connected: a transcript field, a brief tool (`get_meeting_brief`), a Copy AI prompt button, and an AI draft mark until a person reviews. No model runs inside AgencyOS, so it costs nothing. Spec: `docs/specs/2026-10-06-phase-16-meeting-intelligence.md`.
+## 2026-10-06: Phase 13 SOP change requests built (roadmap step 11)
+
+- A change request belongs to an SOP and moves through identified, needs review, approved, in progress, testing and published, or is rejected with a reason. Spec: `docs/specs/2026-10-06-phase-13-sop-change-requests.md`. Migration 017.
+- Publishing never overwrites an approved SOP. It adds a new version through `sops.addVersion` in the same transaction and records which version it made. Tasks pinned to an older version keep it. Content comes from the request's proposed content, or is written in the publish sheet.
+- Permissions: `sopchanges.view` and `sopchanges.create` for everyone, `sopchanges.manage` for Manager and above. A Contractor raises one only on an SOP of their own task and sees only their own. Only a manager publishes.
+- An AI can raise requests and edit drafts (identified or needs review). It cannot approve, reject, start, test or publish, enforced in the service and in the plan guard. There is no publish tool.
+- Screens: a Change requests panel and Raise button on the SOP page, `#/sops/changes` with status filters, and a Raise SOP change request shortcut on the QA review sheet.

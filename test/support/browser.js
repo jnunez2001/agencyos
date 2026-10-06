@@ -16,6 +16,10 @@ const CAN = {
   contractor: { 'followups.view': 1, 'notes.view': 1, 'events.view': 1, 'events.own': 1, 'ai.use': 1, 'org.view': 1, 'profile.edit_self': 1, 'tasks.view': 1, 'tasks.work': 1 },
 };
 CAN.admin = CAN.owner;
+// SOP change requests: everyone views and raises; managers and above decide and publish.
+for (const role of ['owner', 'manager', 'employee', 'contractor']) Object.assign(CAN[role], { 'sopchanges.view': 1, 'sopchanges.create': 1 });
+for (const role of ['owner', 'manager']) CAN[role]['sopchanges.manage'] = 1;
+const CHANGE = (id, status, extra = {}) => ({ id, sopId: 1, sopTitle: 'Page Optimization', title: id === 1 ? 'Add a speed check' : id === 2 ? 'Reword step two' : 'Older fix', details: 'Pages are slow and nobody checks', proposedText: '', hasProposedContent: id !== 2, priority: id === 1 ? 'high' : 'normal', status, sourceType: id === 1 ? 'task' : null, sourceId: id === 1 ? 1 : null, sourceTitle: null, rejectedReason: '', reviewedByName: null, reviewedAt: null, publishedVersionId: null, publishedVersion: null, publishedByName: null, publishedAt: null, createdBy: 2, createdByName: 'Rayne', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), canEdit: false, canPublish: false, ...extra });
 
 const PEOPLE = [
   { id: 1, username: 'josh', displayName: 'Josh Nunez', role: 'owner', isActive: true, jobTitle: 'Founder', department: '', mustChangePassword: false },
@@ -91,6 +95,18 @@ function answers(role, { mustChange = false, empty = false, signedOut = false } 
     if (pathname === '/sops/1' && method === 'GET') return { ...SOP_LIST[0], content: SOP_CONTENT, versions: [{ id: 2, label: '1.1', changeNote: 'Added a step', createdAt: NOW, createdByName: 'Mark Cruz' }, { id: 1, label: '1.0', changeNote: 'First version', createdAt: '2026-10-01T08:00:00.000Z', createdByName: 'Josh Nunez' }] };
     if (pathname === '/sops/1/versions/1' && method === 'GET') return { id: 1, label: '1.0', changeNote: 'First version', createdAt: NOW, createdByName: 'Josh Nunez', content: { ...SOP_CONTENT, steps: ['Old step one', 'Old step two'] } };
     if (pathname === '/qa' && method === 'GET') return can['qa.review'] ? [{ reviewId: 5, taskId: 2, title: 'Logo options', projectName: 'New website', clientName: 'Acme Dental', assigneeName: 'Rayne', submittedByName: 'Rayne', submittedAt: NOW, sopTitle: 'Page Optimization', sopVersion: '1.0', checklistTotal: 2 }] : { __status: 403, error: 'Not allowed' };
+    if (pathname === '/sop-changes' && method === 'GET') {
+      const m = !!can['sopchanges.manage'];
+      const rows = [CHANGE(1, 'needs_review', { canEdit: m, sourceTitle: m ? 'Homepage copy' : null }), CHANGE(2, 'approved', { canEdit: m, canPublish: m, reviewedByName: 'Mark Cruz', reviewedAt: NOW }), CHANGE(3, 'published', { publishedVersion: '1.1', publishedByName: 'Mark Cruz', publishedAt: NOW })];
+      return rows.filter((x) => !new URLSearchParams(url.split('?')[1] || '').get('sopId') || x.sopId === Number(new URLSearchParams(url.split('?')[1]).get('sopId')));
+    }
+    if (pathname === '/sop-changes' && method === 'POST') return { ...CHANGE(4, body.status || 'identified'), ...body, id: 4 };
+    if (/^\/sop-changes\/\d+$/.test(pathname) && method === 'GET') {
+      const id = Number(pathname.split('/')[2]); const m = !!can['sopchanges.manage'];
+      return { ...CHANGE(id, id === 1 ? 'needs_review' : id === 2 ? 'approved' : 'published', { canEdit: m && id !== 3, canPublish: m && id === 2, sourceTitle: m && id === 1 ? 'Homepage copy' : null }), proposedContent: id === 1 ? { steps: ['Research', 'Write', 'Check the page speed'] } : null };
+    }
+    if (/^\/sop-changes\/\d+$/.test(pathname) && method === 'PATCH') return { ...CHANGE(Number(pathname.split('/')[2]), body.status || 'needs_review'), ...body };
+    if (/^\/sop-changes\/\d+\/publish$/.test(pathname) && method === 'POST') return CHANGE(Number(pathname.split('/')[2]), 'published', { publishedVersion: '1.2' });
     if (/^\/tasks\/\d+\/comments$/.test(pathname) && method === 'GET') return [{ id: 1, taskId: 1, authorId: 2, authorName: 'Rayne', body: 'Please start with the services page', createdAt: NOW }];
     if (pathname === '/api-keys' && method === 'GET') return [{ id: 4, name: 'Claude', kind: 'oauth', access: 'propose', prefix: 'OAuth', userId: 1, ownerName: 'Josh Nunez', createdAt: NOW, lastUsedAt: NOW, revoked: false }, { id: 1, kind: 'key', name: 'Claude on my Mac', access: 'propose', prefix: 'aos_Ab12', userId: 1, ownerName: 'Josh Nunez', createdAt: NOW, lastUsedAt: NOW, revoked: false }, { id: 2, kind: 'key', name: 'Old key', access: 'direct', prefix: 'aos_Zz99', userId: 1, ownerName: 'Josh Nunez', createdAt: NOW, lastUsedAt: null, revoked: true }];
     if (pathname === '/api-keys' && method === 'POST') return { id: 3, name: 'New', access: 'propose', prefix: 'aos_Qq77', userId: 1, ownerName: 'Josh Nunez', createdAt: NOW, lastUsedAt: null, revoked: false, token: 'aos_Qq77SecretSecretSecretSecretSecret' };

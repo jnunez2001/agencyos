@@ -2,6 +2,7 @@
 // SOPs: the list, an SOP page with its content and versions, and the forms.
 import { h, icon, openSheet, goAfterSheets } from '../dom.js';
 import { api } from '../api.js';
+import { changesPanel, changesListView, openRaiseChange } from './sopchanges.js';
 import { field, selectField, textareaField, sheetForm, pill, formatWhen, SOP_STATUS_LABEL, PRIORITY_LABEL } from '../ui.js';
 
 const STATUSES = Object.keys(SOP_STATUS_LABEL);
@@ -100,6 +101,7 @@ async function sopPage(session, id, rerender) {
   const manage = session.can['sops.manage'];
   const members = manage ? await api('GET', '/members') : [];
   const c = sop.content;
+  const changes = await changesPanel(session, sop, rerender);
   const versions = h('div', { class: 'list-inner' }, sop.versions.map((v, i) => h('div', { class: 'row static' },
     h('div', { class: 'grow' }, h('div', { class: 'row-title' }, `Version ${v.label}`, i === 0 ? h('span', { class: 'pill role-owner' }, 'Current') : null), h('div', { class: 'row-sub' }, [v.changeNote, `${v.createdByName || 'Someone'}, ${formatWhen(v.createdAt)}`].filter(Boolean).join(' · ')),
       i === 0 ? null : h('button', { class: 'btn-text', type: 'button', onclick: async () => {
@@ -113,13 +115,15 @@ async function sopPage(session, id, rerender) {
     h('div', { class: 'page-head' }, h('div', {}, h('h1', { class: 'page-title' }, sop.title), h('div', { class: 'head-meta' }, sopPill(sop.status), h('span', { class: 'pill' }, `v${sop.version}`), sop.requiresQa ? h('span', { class: 'pill role-owner' }, 'Needs QA') : null)),
       h('div', { class: 'head-actions' },
         session.can['tasks.manage'] && ['approved', 'testing'].includes(sop.status) ? h('button', { class: 'btn btn-primary', type: 'button', onclick: () => openUse(sop).catch((e) => alert(e.message)) }, 'Use in a project') : null,
+        session.can['sopchanges.create'] && h('button', { class: 'btn', type: 'button', onclick: () => openRaiseChange(session, { sopId: sop.id, sopTitle: sop.title }, rerender) }, 'Raise change request'),
         manage && h('button', { class: 'btn', type: 'button', onclick: () => openNewVersion(sop, rerender) }, 'New version'),
         manage && h('button', { class: 'btn', type: 'button', onclick: () => openSopDetails(sop, members, rerender) }, 'Details'))),
     h('div', { class: 'split' },
       h('div', { class: 'stack' },
         h('section', { class: 'panel' }, h('div', { class: 'panel-head' }, h('h2', {}, 'About')),
           h('dl', { class: 'facts' }, h('dt', {}, 'Service'), h('dd', {}, sop.service || 'Not set'), h('dt', {}, 'Owner'), h('dd', {}, sop.ownerName || 'Nobody'), h('dt', {}, 'Updated'), h('dd', {}, formatWhen(sop.updatedAt)))),
-        h('section', { class: 'panel' }, h('div', { class: 'panel-head' }, h('h2', {}, 'Versions')), versions)),
+        h('section', { class: 'panel' }, h('div', { class: 'panel-head' }, h('h2', {}, 'Versions')), versions),
+        changes),
       h('section', { class: 'panel' },
         section('Purpose', textBlock(c.purpose)), section('When to use', textBlock(c.whenToUse)), section('Required inputs', textBlock(c.inputs)),
         section('Steps', listBlock('ol', c.steps)), section('Quality checklist', listBlock('ul', c.checklist)),
@@ -127,6 +131,7 @@ async function sopPage(session, id, rerender) {
 }
 
 export async function sopsView(session, { param, rerender }) {
+  if (param === 'changes') return changesListView(session, { rerender });
   if (param) return sopPage(session, param, rerender);
   const query = new URLSearchParams();
   if (statusFilter !== 'all') query.set('status', statusFilter);
@@ -138,6 +143,7 @@ export async function sopsView(session, { param, rerender }) {
   const statuses = session.can['sops.manage'] ? STATUSES : ['approved', 'testing', 'deprecated'];
   return h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('h1', { class: 'page-title' }, 'SOPs'),
+      session.can['sopchanges.view'] && h('a', { class: 'btn', href: '#/sops/changes' }, 'Change requests'),
       session.can['sops.manage'] && h('button', { class: 'btn btn-primary', type: 'button', onclick: () => openNewSop(session, async (made) => goAfterSheets(`#/sops/${made.id}`)).catch((e) => alert(e.message)) }, icon('plus'), 'New SOP')),
     h('div', { class: 'chips' }, statuses.map((s) => chip(s, SOP_STATUS_LABEL[s])), chip('all', 'All')),
     box.el,
