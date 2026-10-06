@@ -9,6 +9,9 @@ const members = require('../services/members');
 const profiles = require('../services/profiles');
 const activity = require('../services/activity');
 const dashboard = require('../services/dashboard');
+const clients = require('../services/clients');
+const projects = require('../services/projects');
+const tasks = require('../services/tasks');
 const { ServiceError } = require('../services/errors');
 
 function idParam(req) {
@@ -72,6 +75,27 @@ module.exports = function apiRouter(db) {
   r.patch('/profile', (req, res) => res.json(profiles.updateProfile(db, ctxOf(req), req.auth.user.id, req.body)));
 
   r.get('/activity', (req, res) => res.json(activity.listActivity(db, ctxOf(req), { actorId: req.query.actorId, action: req.query.action, limit: req.query.limit })));
+  r.get('/clients', (req, res) => res.json(clients.listClients(db, ctxOf(req), { status: req.query.status })));
+  r.post('/clients', (req, res) => res.json(clients.createClient(db, ctxOf(req), req.body)));
+  r.get('/clients/:id', (req, res) => res.json(clients.getClient(db, ctxOf(req), idParam(req))));
+  r.patch('/clients/:id', (req, res) => res.json(clients.updateClient(db, ctxOf(req), idParam(req), req.body)));
+  r.post('/clients/:id/contacts', (req, res) => res.json(clients.addContact(db, ctxOf(req), idParam(req), req.body)));
+  r.patch('/contacts/:id', (req, res) => res.json(clients.updateContact(db, ctxOf(req), idParam(req), req.body)));
+  r.delete('/contacts/:id', (req, res) => res.json(clients.deleteContact(db, ctxOf(req), idParam(req))));
+
+  r.get('/projects', (req, res) => res.json(projects.listProjects(db, ctxOf(req), { clientId: req.query.clientId, status: req.query.status })));
+  r.post('/projects', (req, res) => res.json(projects.createProject(db, ctxOf(req), req.body)));
+  r.get('/projects/:id', (req, res) => res.json(projects.getProject(db, ctxOf(req), idParam(req))));
+  r.patch('/projects/:id', (req, res) => res.json(projects.updateProject(db, ctxOf(req), idParam(req), req.body)));
+
+  r.get('/tasks', (req, res) => res.json(tasks.listTasks(db, ctxOf(req), req.query)));
+  r.post('/tasks', (req, res) => res.json(tasks.createTask(db, ctxOf(req), req.body)));
+  r.get('/tasks/:id', (req, res) => res.json(tasks.getTask(db, ctxOf(req), idParam(req))));
+  r.patch('/tasks/:id', (req, res) => res.json(tasks.updateTask(db, ctxOf(req), idParam(req), req.body)));
+  r.delete('/tasks/:id', (req, res) => res.json(tasks.deleteTask(db, ctxOf(req), idParam(req))));
+  r.get('/tasks/:id/comments', (req, res) => res.json(tasks.listComments(db, ctxOf(req), idParam(req))));
+  r.post('/tasks/:id/comments', (req, res) => res.json(tasks.addComment(db, ctxOf(req), idParam(req), req.body)));
+
   r.get('/dashboard', (req, res) => res.json(dashboard.getDashboard(db, ctxOf(req))));
 
   r.use((req, res) => res.status(404).json({ error: 'Not found' }));
