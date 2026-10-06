@@ -17,6 +17,14 @@ test('the team list shows everyone in the agency and nobody from another agency'
   assert.ok(!JSON.stringify(list).includes('password'));
 });
 
+test('each member says whether the viewer may manage them', async () => {
+  const f = await fixture();
+  const byUser = (ctx) => Object.fromEntries(members.listMembers(f.db, ctx).map((m) => [m.username, m.canManage]));
+  assert.deepEqual(byUser(f.josh), { josh: true, rayne: true, mark: true, sarah: true, cole: true });
+  assert.deepEqual(byUser(f.rayne), { josh: false, rayne: false, mark: true, sarah: true, cole: true });
+  assert.deepEqual(byUser(f.mark), { josh: false, rayne: false, mark: false, sarah: false, cole: false });
+});
+
 test('owner, admin, manager and employee can see the team; a contractor cannot', async () => {
   const f = await fixture();
   for (const ctx of [f.josh, f.rayne, f.mark, f.sarah]) assert.equal(members.listMembers(f.db, ctx).length, 5);

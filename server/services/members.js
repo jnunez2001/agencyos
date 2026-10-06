@@ -19,9 +19,11 @@ const SELECT = `
 
 const logCtx = (ctx) => ({ organizationId: ctx.organizationId, actorUserId: ctx.actor.id, source: ctx.source || 'web', ip: ctx.ip || null });
 
-function shape(row, canSeeAll) {
+function shape(row, canSeeAll, actorRole) {
   const out = { id: row.id, username: row.username, displayName: row.displayName, role: row.role, isActive: !!row.isActive, jobTitle: row.jobTitle, department: row.department };
   if (canSeeAll) out.mustChangePassword = !!row.mustChangePassword;
+  // Whether the viewer may change this person. The screens use it to show or hide the actions.
+  if (actorRole) out.canManage = perms.canManage(actorRole, row.role);
   return out;
 }
 
@@ -34,7 +36,7 @@ function findMember(db, organizationId, id) {
 function listMembers(db, ctx) {
   if (!perms.can(ctx.actor.role, 'members.list')) throw new ServiceError(403, 'Not allowed');
   const detail = perms.can(ctx.actor.role, 'members.manage');
-  return db.prepare(`${SELECT} ORDER BY m.id`).all(ctx.organizationId).map((r) => shape(r, detail));
+  return db.prepare(`${SELECT} ORDER BY m.id`).all(ctx.organizationId).map((r) => shape(r, detail, ctx.actor.role));
 }
 
 // Used by setup and by the Owner or Admin adding a person. The caller has already checked permission.
@@ -64,7 +66,7 @@ async function createMember(db, ctx, input) {
   const org = db.prepare('SELECT timezone FROM organizations WHERE id = ?').get(ctx.organizationId);
   const id = await insertMember(db, { organizationId: ctx.organizationId, username, displayName, role: input.role, password: input.password, mustChange: true, timezone: org.timezone });
   logActivity(db, { ...logCtx(ctx), action: 'member.create', objectType: 'member', objectId: id, after: { username, displayName, role: input.role } });
-  return shape(findMember(db, ctx.organizationId, id), true);
+  return shape(findMember(db, ctx.organizationId, id), true, ctx.actor.role);
 }
 
 function activeOwners(db, organizationId) {
@@ -97,7 +99,7 @@ function updateMember(db, ctx, id, patch = {}) {
     before.isActive = !!target.isActive;
     after.isActive = !!patch.isActive;
   }
-  if (Object.keys(after).length === 0) return shape(target, true);
+  if (Object.keys(after).length === 0) return shape(target, true, ctx.actor.role);
 
   db.transaction(() => {
     if (after.role) db.prepare('UPDATE organization_members SET role = ? WHERE user_id = ? AND organization_id = ?').run(after.role, target.id, ctx.organizationId);
@@ -108,7 +110,7 @@ function updateMember(db, ctx, id, patch = {}) {
     }
     logActivity(db, { ...logCtx(ctx), action: 'member.update', objectType: 'member', objectId: target.id, before, after });
   })();
-  return shape(findMember(db, ctx.organizationId, id), true);
+  return shape(findMember(db, ctx.organizationId, id), true, ctx.actor.role);
 }
 
 async function resetPassword(db, ctx, id, { password }) {
