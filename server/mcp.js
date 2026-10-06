@@ -13,6 +13,7 @@ const decisions = require('./services/decisions');
 const followups = require('./services/followups');
 const notifications = require('./services/notifications');
 const noterecords = require('./services/noterecords');
+const workspace = require('./services/workspace');
 const members = require('./services/members');
 const dashboard = require('./services/dashboard');
 const search = require('./services/search');
@@ -72,6 +73,7 @@ const TOOLS = [
   { name: 'list_decisions', description: 'Recorded decisions, newest first. Filters: clientId, projectId, status (active or reversed), q.', schema: obj({ clientId: num('Client id'), projectId: num('Project id'), status: str('active or reversed'), q: str('Search text') }), run: (db, ctx, a) => decisions.listDecisions(db, ctx, a) },
   { name: 'list_follow_ups', description: 'Follow-ups, open first by due date. Filters: clientId, projectId, status (open, done, cancelled), assigneeId, mine, overdue, q.', schema: obj({ clientId: num('Client id'), projectId: num('Project id'), status: str('open, done or cancelled'), assigneeId: num('Team member id'), mine: { type: 'boolean' }, overdue: { type: 'boolean' }, q: str('Search text') }), run: (db, ctx, a) => followups.listFollowUps(db, ctx, { ...a, mine: a.mine ? '1' : '', overdue: a.overdue ? '1' : '' }) },
   { name: 'get_meeting_brief', description: 'Everything needed to turn a meeting into structured notes: the note with its pasted transcript, the calendar event, and the client\'s open requests, open follow-ups and recent decisions (so nothing is duplicated). Then use update_meeting_note and create_records_from_note.', schema: obj({ noteId: num('Meeting note id') }, ['noteId']), run: (db, ctx, a) => noterecords.briefForNote(db, ctx, a.noteId) },
+  { name: 'get_workspace', description: 'The key owner\'s home: My Day (today\'s events, tasks and follow-ups due or overdue, requests they handle), plus the Manager view and Owner overview when their role may see them.', schema: obj(), run: (db, ctx) => workspace.getWorkspace(db, ctx) },
   { name: 'list_notifications', description: 'The key owner\'s own notifications, newest first. Pass unread to see only unread ones.', schema: obj({ unread: { type: 'boolean' } }), run: (db, ctx, a) => notifications.listNotifications(db, ctx, { unread: !!a.unread }) },
   { name: 'list_team', description: 'The people in the agency with their ids, roles and job titles. Use the ids to assign work.', schema: obj(),
     run: (db, ctx) => members.listMembers(db, ctx).map((m) => ({ id: m.id, username: m.username, displayName: m.displayName, role: m.role, isActive: m.isActive, jobTitle: m.jobTitle, department: m.department })) },

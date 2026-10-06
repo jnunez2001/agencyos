@@ -24,6 +24,12 @@ test('the Owner can open every work screen and sheet without an error or stray t
   assert.match(text, /Overdue, Jan 1, 2020/);
   assert.ok(app.main().querySelector('.bar-fill.over'), 'an overloaded person is marked');
   assert.equal(app.main().querySelector('.bar-fill').style.width, '30%');
+  assert.match(text, /Today/);
+  assert.match(text, /Team sync/);
+  assert.match(text, /Owner overview/);
+  assert.match(text, /Needs a manager/);
+  assert.match(text, /Meetings with no notes yet/);
+  assert.match(text, /Clients at risk/);
   clean('dashboard');
 
   // Tasks: list, board, filters

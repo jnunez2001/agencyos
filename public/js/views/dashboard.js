@@ -3,6 +3,7 @@ import { h } from '../dom.js';
 import { api } from '../api.js';
 import { greeting, ROLE_LABEL } from '../ui.js';
 import { taskRow } from './tasks.js';
+import { workspacePanels } from './workspace.js';
 
 const figure = (value, label, warn) => h('div', { class: `figure${warn && value > 0 ? ' warn' : ''}` }, h('span', { class: 'figure-value' }, String(value)), h('span', { class: 'figure-label' }, label));
 
@@ -17,7 +18,7 @@ function loadBar(w) {
 }
 
 export async function dashboardView(session, { rerender }) {
-  const d = await api('GET', '/dashboard');
+  const [d, ws] = await Promise.all([api('GET', '/dashboard'), workspacePanels(session)]);
   const t = d.team;
   const mine = h('section', { class: 'panel' },
     h('div', { class: 'panel-head' }, h('h2', {}, 'My work'), h('a', { class: 'link', href: '#/tasks' }, 'All tasks')),
@@ -43,5 +44,5 @@ export async function dashboardView(session, { rerender }) {
     h('p', {}, `${d.qaWaiting} ${d.qaWaiting === 1 ? 'task is' : 'tasks are'} waiting for review.`));
   return h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('div', {}, h('p', { class: 'eyebrow' }, d.organization.name), h('h1', { class: 'page-title' }, greeting(d.organization.timezone, d.me.displayName)))),
-    h('div', { class: 'dash' }, h('div', { class: 'stack' }, qa, inbox, mine, workload), h('div', { class: 'stack' }, agency, team)));
+    h('div', { class: 'dash' }, h('div', { class: 'stack' }, ws.myDay, qa, inbox, mine, workload), h('div', { class: 'stack' }, ws.owner, ws.manager, agency, team)));
 }

@@ -141,3 +141,7 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 - Search reuses each owning service's own list function, so what a person can find is exactly what they can open: a Contractor finds only their own tasks, events they attend or created, notes they wrote or attend, and follow-ups assigned to them. At least 2 characters, at most 8 results per group, `%` and `_` searched as plain text. No new migration and no full-text index; plain LIKE is enough at this size.
 - AI gets the same through the read tool `search_agency`, limited to what the key's owner may see.
 - Create offers only what the role's permissions allow. Requests, follow-ups and decisions open the same full forms as their screens (`views/requests.js`, `views/records.js`). Search results open `#/requests/ID`, or the Decisions and Follow-ups tabs of Meetings; `#/calendar/ID` and `#/tasks/ID` open the event or task sheet once.
+
+## 2026-10-06: Role workspaces (roadmap step 7)
+
+- The Dashboard is now each role's home: Today (My Day) for everyone, Needs a manager for Manager and above, Owner overview for Owner and Admin, all from one call (`GET /api/workspace`, MCP `get_workspace`) that only works out what the role may see. No migration. Spec: `docs/specs/2026-10-06-phase-17-role-workspaces.md`.
