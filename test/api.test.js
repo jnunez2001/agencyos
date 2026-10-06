@@ -140,3 +140,16 @@ test('logout ends the session', async () => {
   assert.equal((await c.call('GET', '/session')).status, 401);
   await app.close();
 });
+
+test('the privacy policy is public and says what is done with Google data', async () => {
+  const app = await setUp();
+  const res = await fetch(app.base.replace('/api', '/privacy'));
+  assert.equal(res.status, 200);
+  const html = await res.text();
+  assert.match(html, /Privacy policy/);
+  assert.match(html, /Search Console/);
+  assert.match(html, /not sold/i);
+  assert.match(html, /revoke/i);
+  assert.ok(!html.includes('\u2014'));
+  await app.close();
+});

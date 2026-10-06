@@ -31,6 +31,8 @@ function createApp(db, { google = null } = {}) {
   // "no-store": a proxy such as Cloudflare rewrites "no-cache" into hours of browser caching, which hides updates.
   // The pages are small, so downloading them each time costs little.
   app.use(express.static(path.join(config.root, 'public'), { etag: true, setHeaders: (res) => res.setHeader('Cache-Control', 'no-store') }));
+  // The privacy policy that Google asks for, at a plain address.
+  app.get('/privacy', (req, res) => res.sendFile(path.join(config.root, 'public', 'privacy.html')));
   app.get('*', (req, res) => res.sendFile(path.join(config.root, 'public', 'index.html')));
   return app;
 }

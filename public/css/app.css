@@ -345,3 +345,4 @@ a.row:hover { background: var(--hover); }
 .or { display: flex; align-items: center; gap: 12px; color: var(--muted); font-size: 13px; }
 .or::before, .or::after { content: ''; flex: 1; height: 1px; background: var(--line); }
 a.btn { text-decoration: none; }
+.narrow-page { max-width: 720px; }
