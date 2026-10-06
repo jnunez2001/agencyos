@@ -116,3 +116,10 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 
 - Structured notes (summary, agenda, discussion, decisions, requests, follow-ups) kept as plain text sections; steps 3 to 6 will turn decisions, requests and follow-ups into real records. Spec: `docs/specs/2026-10-06-phase-10-meeting-notes.md`.
 - One note per event, linked both ways. Attendees write a draft; only a manager finalizes, reopens or deletes. AI can draft and edit drafts but never finalizes.
+
+## 2026-10-06: Global search and Create
+
+- One search box and one Create button in the app shell (sidebar head on desktop, top bar on phones). `/` opens search. Spec: `docs/specs/2026-10-06-phase-14-search-and-create.md`.
+- Search reuses each owning service's own list function, so what a person can find is exactly what they can open: a Contractor finds only their own tasks, events they attend or created, notes they wrote or attend, and follow-ups assigned to them. At least 2 characters, at most 8 results per group, `%` and `_` searched as plain text. No new migration and no full-text index; plain LIKE is enough at this size.
+- AI gets the same through the read tool `search_agency`, limited to what the key's owner may see.
+- Create offers only what the role's permissions allow. Requests, follow-ups and decisions use small forms in `public/js/views/createforms.js` until their full screens exist. Search results for those open `#/requests/ID`, `#/follow-ups/ID` and `#/decisions/ID`, which need the screens to exist; `#/calendar/ID` and `#/tasks/ID` open the event or task sheet once.

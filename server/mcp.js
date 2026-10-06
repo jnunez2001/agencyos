@@ -13,6 +13,7 @@ const decisions = require('./services/decisions');
 const followups = require('./services/followups');
 const members = require('./services/members');
 const dashboard = require('./services/dashboard');
+const search = require('./services/search');
 const sops = require('./services/sops');
 const qa = require('./services/qa');
 const services = require('./services/services');
@@ -79,6 +80,7 @@ const TOOLS = [
   { name: 'list_reports', description: 'Reports, newest period first, optionally for one client or one status (draft or approved).', schema: obj({ clientId: num('Client id'), status: str('draft or approved') }), run: (db, ctx, a) => reports.listReports(db, ctx, a) },
   { name: 'get_report', description: 'One report with its seven sections: executive summary, work completed, key results, important changes, problems and risks, next priorities, recommendations.', schema: obj({ id: num('Report id') }, ['id']), run: (db, ctx, a) => reports.getReport(db, ctx, a.id) },
   { name: 'list_qa_queue', description: 'Work waiting for QA review. Reviewing itself is done by a person in AgencyOS, not by an AI.', schema: obj(), run: (db, ctx) => qa.listQueue(db, ctx) },
+  { name: 'search_agency', description: 'Search the whole agency at once: clients, projects, tasks, SOPs, meeting notes, client requests, decisions, follow-ups, events and team members. Needs at least 2 characters; at most 8 results per group. Only finds what this person may see.', schema: obj({ q: str('Text to find'), limit: num('Results per group, at most 8') }, ['q']), run: (db, ctx, a) => search.search(db, ctx, a.q, { limit: a.limit }) },
 
   { name: 'apply_changes', write: true, description: `Make several changes at once as one plan that is applied all together or not at all. Steps run in order; give a step "as" to name its result and use "$name" in clientId, projectId, taskId or id of later steps. Actions: create_client, update_client (args.id), create_contact (args.clientId), create_project (args.clientId), update_project (args.id), create_task (args.projectId, optional sopId, qaRequired and goalId), create_goal (args.clientId: title, why, target, dueDate, serviceId), update_goal (args.id, status active, achieved or dropped), record_result (args.clientId: metric, value, unit, recordedOn, goalId, note), generate_report (args.clientId, periodStart, periodEnd: a draft with the facts filled in), create_report (args.clientId, title, periodStart, periodEnd and the sections), update_report (args.id and any sections), update_task (args.id), add_comment (args.taskId), create_sop, update_sop (args.id), add_sop_version (args.id), create_tasks_from_sop (args.sopId and args.projectId, mode task or steps). An AI can draft SOPs (status draft or testing) and reports (draft), but only a person can approve an SOP or a report, or review work in QA. At most 50 steps.${PLAN_NOTE}`,
     schema: obj({ summary: str('One sentence: what this plan does'), steps: { type: 'array', items: obj({ action: str('One of the actions above'), as: str('Optional name for this step\'s result'), args: { type: 'object' } }, ['action', 'args']) } }, ['summary', 'steps']),

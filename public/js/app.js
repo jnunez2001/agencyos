@@ -21,6 +21,7 @@ import { tasksView } from './views/tasks.js';
 import { projectsView } from './views/projects.js';
 import { clientsView } from './views/clients.js';
 import { visibleNav, bottomNav } from './nav.js';
+import { quickButtons, installSearchKey } from './quick.js';
 
 const root = document.getElementById('app');
 let session = null;
@@ -65,6 +66,7 @@ function shell(key, main) {
   return h('div', { class: 'shell' },
     h('aside', { class: 'sidebar' },
       h('div', { class: 'brand-mark' }, h('span', { class: 'brand-dot' }), h('span', {}, 'AgencyOS')),
+      quickButtons(session, render),
       h('p', { class: 'org-name' }, session.organization.name),
       h('nav', { 'aria-label': 'Main' }, items.map((n) => link(n, n.key === key))),
       h('div', { class: 'sidebar-foot' },
@@ -75,6 +77,7 @@ function shell(key, main) {
     h('div', { class: 'content' },
       h('header', { class: 'topbar' }, h('div', { class: 'brand-mark' }, h('span', { class: 'brand-dot' }), h('span', {}, 'AgencyOS')),
         h('div', { class: 'foot-actions' },
+          quickButtons(session, render, { compact: true }),
           h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Toggle dark mode', onclick: toggleTheme }, icon(currentTheme() === 'dark' ? 'sun' : 'moon')),
           h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Sign out', onclick: signOut }, icon('logout')))),
       main),
@@ -125,5 +128,6 @@ async function boot() {
   }
 }
 
+installSearchKey(() => session);
 window.addEventListener('hashchange', render);
 boot();

@@ -12,7 +12,7 @@ const CURRENT = ['lead', 'onboarding', 'active', 'at_risk'];
 const FILTERS = { current: ['Current', (c) => CURRENT.includes(c.status)], paused: ['Paused', (c) => c.status === 'paused'], past: ['Past', (c) => ['completed', 'archived'].includes(c.status)], all: ['All', () => true] };
 let statusFilter = 'current';
 
-async function openClientForm(session, client, onChanged) {
+export async function openClientForm(session, client, onChanged) {
   const [services, members] = await Promise.all([session.can['services.view'] ? api('GET', '/services') : [], api('GET', '/members')]);
   openSheet(client ? 'Edit client' : 'New client', (close) => {
     const name = field('Name', { name: 'name', maxlength: 100, required: true, value: client ? client.name : '' });

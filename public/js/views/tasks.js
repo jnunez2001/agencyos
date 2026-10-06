@@ -172,7 +172,12 @@ function boardView(session, list, onChanged) {
   }));
 }
 
-export async function tasksView(session, { rerender }) {
+export async function tasksView(session, { param, rerender }) {
+  // An address like #/tasks/12 (from search) opens that task once, then goes back to the plain task list address.
+  if (param) {
+    history.replaceState(null, '', '#/tasks');
+    openTask(session, param, rerender).catch((e) => alert(e.message));
+  }
   const canFilterMore = session.can['projects.view'];
   const [list, projects, members] = await Promise.all([
     api('GET', `/tasks?${queryOf(session)}`),
