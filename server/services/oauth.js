@@ -99,7 +99,7 @@ function startAuthorization(db, q, resourceUrl) {
   return id;
 }
 
-const need = (ctx) => { if (!perms.can(ctx.actor.role, 'ai.manage')) throw new ServiceError(403, 'Only an Owner or Admin can connect an AI'); };
+const need = (ctx) => { if (!perms.can(ctx.actor.role, 'ai.use')) throw new ServiceError(403, 'Not allowed'); };
 
 function findRequest(db, id) {
   const row = typeof id === 'string' && db.prepare('SELECT r.*, c.client_name AS clientName FROM oauth_requests r JOIN oauth_clients c ON c.client_id = r.client_id WHERE r.id = ? AND r.expires_at > ?').get(id, new Date().toISOString());

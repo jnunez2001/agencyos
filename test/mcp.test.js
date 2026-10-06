@@ -152,17 +152,25 @@ test('a key is limited to 120 calls a minute', async () => {
   await app.close();
 });
 
-test('only Owner and Admin manage keys and the inbox over the web', async () => {
+test('everyone makes personal keys and sees only their own; Owner and Admin see all', async () => {
   const app = await setUp();
   const sarah = app.client();
   await sarah.signIn('sarah');
-  for (const [m, p, b] of [['GET', '/api-keys'], ['POST', '/api-keys', { name: 'x', access: 'read' }], ['GET', '/ai/proposals']]) assert.equal((await sarah.call(m, p, b)).status, 403, `${m} ${p}`);
+  const mine = (await sarah.call('POST', '/api-keys', { name: 'sarah agent', access: 'read' })).data;
+  assert.equal(mine.access, 'read');
+  const ownerKey = await withKey(app, 'read', 'owner key');
+  assert.deepEqual((await sarah.call('GET', '/api-keys')).data.map((k) => k.name), ['sarah agent']);
+  assert.equal((await sarah.call('DELETE', `/api-keys/${ownerKey.id}`)).status, 404);
+  assert.equal((await sarah.call('GET', '/ai/proposals')).status, 200);
   assert.equal((await sarah.call('GET', '/dashboard')).data.aiPending, 0);
-  const key = await withKey(app, 'read');
-  const list = (await app.owner.call('GET', '/api-keys')).data;
-  assert.equal(list.length, 1);
-  assert.ok(!JSON.stringify(list).includes(key.token));
-  assert.equal((await app.owner.call('PATCH', `/api-keys/${key.id}`, { access: 'propose' })).data.access, 'propose');
+  const all = (await app.owner.call('GET', '/api-keys')).data;
+  assert.deepEqual(all.map((k) => k.name).sort(), ['owner key', 'sarah agent']);
+  assert.ok(!JSON.stringify(all).includes(ownerKey.token));
+  assert.equal((await app.owner.call('PATCH', `/api-keys/${ownerKey.id}`, { access: 'propose' })).data.access, 'propose');
+  // her key works as her: what an Employee may not see is a tool error, not a crash
+  const c = mcp(app, mine.token);
+  assert.equal((await c.tool('get_workload')).isError, true);
+  assert.equal((await c.tool('list_team')).data.length, 5);
   assert.equal((await mcp(app, null).post({ jsonrpc: '2.0', id: 1, method: 'ping' })).status, 401);
   await app.close();
 });

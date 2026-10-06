@@ -9,7 +9,7 @@ test('a Manager sees only what the role allows, and a forbidden address falls ba
   await import('../public/js/app.js');
   await app.wait(250);
   const { document } = app;
-  assert.deepEqual([...document.querySelectorAll('.sidebar .nav-link')].map((a) => a.textContent.trim()), ['Dashboard', 'Tasks', 'Projects', 'Clients', 'Team']);
+  assert.deepEqual([...document.querySelectorAll('.sidebar .nav-link')].map((a) => a.textContent.trim()), ['Dashboard', 'Tasks', 'Projects', 'Clients', 'Team', 'AI agent']);
   await app.go('#/team');
   assert.equal(document.querySelector('.page-head .btn-primary'), null); // no Add member
   document.querySelectorAll('.row')[0].click();

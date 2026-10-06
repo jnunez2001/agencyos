@@ -140,7 +140,9 @@ function submitPlan(db, auth, plan) {
 
 // ---- the inbox ----
 
-const need = (ctx) => { if (!perms.can(ctx.actor.role, 'ai.approve')) fail(403, 'Not allowed'); };
+const need = (ctx) => { if (!perms.can(ctx.actor.role, 'ai.use')) fail(403, 'Not allowed'); };
+// Owner and Admin decide anyone's proposals. Everyone else decides only those of their own connections.
+const decidesAll = (ctx) => perms.can(ctx.actor.role, 'ai.approve');
 const logCtx = (ctx) => ({ organizationId: ctx.organizationId, actorUserId: ctx.actor.id, source: ctx.source || 'web', ip: ctx.ip || null });
 
 const SELECT = `
@@ -154,25 +156,29 @@ const SELECT = `
 
 function listProposals(db, ctx, { status } = {}) {
   need(ctx);
-  const rows = db.prepare(`${SELECT} ${status ? 'AND p.status = ?' : ''} ORDER BY p.id DESC LIMIT 100`).all(...(status ? [ctx.organizationId, status] : [ctx.organizationId]));
+  const where = [];
+  const params = [ctx.organizationId];
+  if (status) { where.push('p.status = ?'); params.push(status); }
+  if (!decidesAll(ctx)) { where.push('p.user_id = ?'); params.push(ctx.actor.id); }
+  const rows = db.prepare(`${SELECT} ${where.map((w) => `AND ${w}`).join(' ')} ORDER BY p.id DESC LIMIT 100`).all(...params);
   return rows.map(({ steps_json: json, ...r }) => ({ ...r, steps: JSON.parse(json).length, lines: describe(db, ctx.organizationId, JSON.parse(json)) }));
 }
 
 function pendingCount(db, ctx) {
-  if (!perms.can(ctx.actor.role, 'ai.approve')) return 0;
-  return db.prepare("SELECT COUNT(*) AS n FROM ai_proposals WHERE organization_id = ? AND status = 'pending'").get(ctx.organizationId).n;
+  if (!perms.can(ctx.actor.role, 'ai.use')) return 0;
+  return db.prepare(`SELECT COUNT(*) AS n FROM ai_proposals WHERE organization_id = ? AND status = 'pending' ${decidesAll(ctx) ? '' : 'AND user_id = ?'}`).get(...(decidesAll(ctx) ? [ctx.organizationId] : [ctx.organizationId, ctx.actor.id])).n;
 }
 
-function findPending(db, organizationId, id) {
-  const row = db.prepare('SELECT * FROM ai_proposals WHERE organization_id = ? AND id = ?').get(organizationId, Number(id));
-  if (!row) fail(404, 'Proposal not found');
+function findPending(db, ctx, id) {
+  const row = db.prepare('SELECT * FROM ai_proposals WHERE organization_id = ? AND id = ?').get(ctx.organizationId, Number(id));
+  if (!row || (!decidesAll(ctx) && row.user_id !== ctx.actor.id)) fail(404, 'Proposal not found');
   if (row.status !== 'pending') fail(409, 'This proposal was already decided');
   return row;
 }
 
 function approveProposal(db, ctx, id) {
   need(ctx);
-  const p = findPending(db, ctx.organizationId, id);
+  const p = findPending(db, ctx, id);
   const steps = JSON.parse(p.steps_json);
   // It runs as the person who owns the key, with their role as it is now.
   const owner = db.prepare('SELECT m.role FROM organization_members m JOIN users u ON u.id = m.user_id WHERE m.organization_id = ? AND u.id = ? AND u.is_active = 1').get(ctx.organizationId, p.user_id);
@@ -201,7 +207,7 @@ function approveProposal(db, ctx, id) {
 
 function rejectProposal(db, ctx, id) {
   need(ctx);
-  const p = findPending(db, ctx.organizationId, id);
+  const p = findPending(db, ctx, id);
   db.transaction(() => {
     db.prepare("UPDATE ai_proposals SET status = 'rejected', decided_by = ?, decided_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").run(ctx.actor.id, p.id);
     logActivity(db, { ...logCtx(ctx), action: 'ai.proposal.reject', objectType: 'ai_proposal', objectId: p.id, after: { summary: p.summary } });

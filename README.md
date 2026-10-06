@@ -46,4 +46,4 @@ Plain Node 22 or newer, Express, SQLite and plain JavaScript pages with no build
 
 ## Connecting an AI
 
-Sign in as Owner or Admin, open **AI**, then **Keys**, then **New key**. Copy the key (it is shown once) and run the Claude Code command shown with it. A key can be read only, ask first (default) or apply directly, and it never does more than its person could. Details are in `docs/specs/2026-10-06-phase-3-ai-access.md`.
+Every person can connect their own AI. Open **AI agent**, then **Setup**. It shows the MCP address, the steps for claude.ai on the web and phone, and a button that makes a personal key and copies a setup prompt to paste into Claude Code or another agent. A key can be read only, ask first (default) or apply directly, and it never does more than its person could. People see only their own connections and proposals. Owner and Admin see and decide everyone's. Details are in `docs/specs/2026-10-06-phase-3-ai-access.md`.

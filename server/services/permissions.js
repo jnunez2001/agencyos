@@ -29,7 +29,8 @@ const ACTIONS = {
   // Change the status of a task assigned to you, and comment on a task you can see.
   'tasks.work': ALL,
   'dashboard.agency': NOT_CONTRACTOR,
-  // API keys for AI access, and approving what an AI proposed.
+  // Everyone connects their own AI as themselves. Owner and Admin also see and decide everyone's.
+  'ai.use': ALL,
   'ai.manage': OWNER_ADMIN,
   'ai.approve': OWNER_ADMIN,
 };

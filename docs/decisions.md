@@ -42,3 +42,9 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 - AI never touches members, roles, passwords, keys or settings, and never deletes.
 - AgencyOS does not call any AI itself, so there is no AI cost.
 - The claude.ai web connector needs OAuth, which is not built. Claude Code works with a header key.
+
+## 2026-10-06: OAuth for claude.ai and personal AI connections
+
+- OAuth sign-in so the claude.ai web and phone apps can connect with just the address. A connection shows up as a revocable key.
+- Every role can connect their own AI (`ai.use`). It acts as that person with their role. Owner and Admin see and decide everyone's connections and proposals. Specs: `docs/specs/2026-10-06-phase-3b-oauth.md` and `phase-3c-agent-setup.md`.
+- One MCP address for everyone. Identity comes from the key or the sign-in, not from the address.

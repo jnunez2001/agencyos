@@ -9,7 +9,7 @@ test('a Contractor sees only Dashboard and Tasks, and other addresses fall back 
   await import('../public/js/app.js');
   await app.wait(250);
   const { document } = app;
-  assert.deepEqual([...document.querySelectorAll('.sidebar .nav-link')].map((a) => a.textContent.trim()), ['Dashboard', 'Tasks']);
+  assert.deepEqual([...document.querySelectorAll('.sidebar .nav-link')].map((a) => a.textContent.trim()), ['Dashboard', 'Tasks', 'AI agent']);
   assert.match(app.main().textContent, /My work/);
   assert.doesNotMatch(app.main().textContent, /Active clients|Workload/);
   await app.go('#/tasks');
@@ -24,6 +24,9 @@ test('a Contractor sees only Dashboard and Tasks, and other addresses fall back 
   assert.equal(strayText(sheet), null);
   sheet.querySelector('button[aria-label=Close]').click();
   await app.wait(100);
+  await app.go('#/ai');
+  assert.match(app.main().textContent, /MCP server address/);
+  assert.equal(strayText(document.body), null);
   for (const hash of ['#/clients', '#/projects', '#/team']) {
     await app.go(hash);
     assert.equal(app.window.location.hash, '#/dashboard', hash);

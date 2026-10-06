@@ -1,12 +1,82 @@
 // Joshua Nunez
-// The AI page: the inbox of changes an AI proposed, and the keys that let an AI connect.
+// The AI agent page: how to connect an AI, the inbox of changes it proposed, and the person's connections.
 import { h, icon, openSheet } from '../dom.js';
 import { api } from '../api.js';
 import { field, selectField, sheetForm, confirmButton, formatWhen, pill } from '../ui.js';
 
 const ACCESS_LABEL = { read: 'Read only', propose: 'Ask me first', direct: 'Apply directly' };
 const ACCESS_HELP = { read: 'The AI can look at your work but cannot change it.', propose: 'The AI can suggest changes. Nothing happens until you approve it in the Inbox.', direct: 'The AI can make changes at once. Every change is logged.' };
-let tab = 'inbox';
+let tab = 'setup';
+
+// ---- setup ----
+
+// Copies text, or reports that it could not so the caller can show it to be copied by hand.
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); return true; } catch { return false; }
+}
+
+function copyButton(label, getText) {
+  const b = h('button', { class: 'btn', type: 'button' }, label);
+  b.addEventListener('click', async () => { b.textContent = (await copyText(getText())) ? 'Copied' : 'Select and copy it by hand'; });
+  return b;
+}
+
+// What the person pastes into their agent. It holds the address and a personal key, and says what to do next.
+export function setupPrompt(url, key) {
+  return [
+    'Connect to my AgencyOS MCP server so you can help me manage my agency.',
+    '',
+    `Server URL: ${url}`,
+    'Transport: streamable HTTP.',
+    `Header: Authorization: Bearer ${key}`,
+    '',
+    `If you are Claude Code, run: claude mcp add --transport http --scope user agencyos ${url} --header "Authorization: Bearer ${key}"`,
+    'Other agents: add it as a remote MCP server with the URL and header above.',
+    '',
+    'When it is connected, call list_team and list_clients to check it works, then tell me what you can do.',
+    'To change several things at once, use apply_changes. Steps can use $name to refer to a record an earlier step created.',
+    'My changes may wait in the AgencyOS AI inbox until I approve them. Never ask me for my password.',
+  ].join('\n');
+}
+
+function setupTab(session, rerender) {
+  const url = `${location.origin}/mcp`;
+  const access = selectField('Access', ['propose', 'read', 'direct'].map((a) => [a, ACCESS_LABEL[a]]), 'propose', { name: 'setup-access' });
+  const help = h('p', { class: 'muted' }, ACCESS_HELP.propose);
+  access.input.addEventListener('change', () => { help.textContent = ACCESS_HELP[access.input.value]; });
+  const result = h('div', { class: 'stack' });
+  const error = h('div', { class: 'error', role: 'alert' });
+  const create = h('button', { class: 'btn btn-primary', type: 'button' }, 'Create key and copy setup prompt');
+  create.addEventListener('click', async () => {
+    error.textContent = '';
+    result.replaceChildren();
+    create.disabled = true;
+    try {
+      const key = await api('POST', '/api-keys', { name: `${session.user.displayName}'s agent`, access: access.input.value });
+      const prompt = setupPrompt(url, key.token);
+      const copied = await copyText(prompt);
+      result.append(
+        h('p', { class: 'notice-strong' }, copied ? 'Copied. Paste it into your agent now. The key is inside it and cannot be shown again.' : 'Copy this now. The key is inside it and cannot be shown again.'),
+        h('textarea', { class: 'input area mono', readonly: true, rows: 8, 'aria-label': 'Setup prompt' }, prompt));
+    } catch (err) { error.textContent = err.message; }
+    create.disabled = false;
+  });
+  const step = (text) => h('li', {}, text);
+  return h('div', { class: 'stack' },
+    h('section', { class: 'panel' },
+      h('div', { class: 'panel-head' }, h('h2', {}, 'MCP server address')),
+      h('div', { class: 'url-row' }, h('code', { class: 'code url' }, url), copyButton('Copy', () => url))),
+    h('section', { class: 'panel' },
+      h('div', { class: 'panel-head' }, h('h2', {}, 'Claude on the web and phone')),
+      h('ol', { class: 'steps' }, step('In claude.ai open Settings, then Connectors, then Add custom connector.'), step('Name it AgencyOS and paste the address above.'), step('Click Connect, sign in here if asked, then choose an access level and Approve.'))),
+    h('section', { class: 'panel' },
+      h('div', { class: 'panel-head' }, h('h2', {}, 'Claude Code and other agents')),
+      access.el, help, error, h('div', { class: 'sheet-actions' }, create), result),
+    h('section', { class: 'panel' },
+      h('div', { class: 'panel-head' }, h('h2', {}, 'Any other MCP client')),
+      h('p', {}, 'Add a remote MCP server (streamable HTTP) with the address above and the header Authorization: Bearer followed by a key from Connections.'),
+      h('div', { class: 'sheet-actions' }, h('button', { class: 'btn', type: 'button', onclick: () => { tab = 'keys'; rerender(); } }, 'Go to Connections'))));
+}
 
 // ---- keys ----
 
@@ -100,7 +170,7 @@ export async function aiView(session, { rerender }) {
   const pendingCount = proposals.filter((p) => p.status === 'pending').length;
   const tabButton = (key, label) => h('button', { class: 'chip', type: 'button', 'aria-pressed': String(tab === key), onclick: () => { tab = key; rerender(); } }, label);
   return h('div', { class: 'page narrow-wide' },
-    h('div', { class: 'page-head' }, h('h1', { class: 'page-title' }, 'AI')),
-    h('div', { class: 'chips' }, tabButton('inbox', pendingCount ? `Inbox (${pendingCount})` : 'Inbox'), tabButton('keys', 'Keys')),
-    tab === 'inbox' ? inboxTab(proposals, rerender) : keysTab(keys, rerender));
+    h('div', { class: 'page-head' }, h('h1', { class: 'page-title' }, 'AI agent')),
+    h('div', { class: 'chips' }, tabButton('setup', 'Setup'), tabButton('inbox', pendingCount ? `Inbox (${pendingCount})` : 'Inbox'), tabButton('keys', 'Connections')),
+    tab === 'setup' ? setupTab(session, rerender) : tab === 'inbox' ? inboxTab(proposals, rerender) : keysTab(keys, rerender));
 }

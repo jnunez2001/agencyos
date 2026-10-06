@@ -172,17 +172,13 @@ test('authorize refuses bad requests', async () => {
   await app.close();
 });
 
-test('only an Owner or Admin can look at or decide a request; cancel and expiry work', async () => {
+test('any signed-in person can approve a sign-in for themselves; cancel and expiry work', async () => {
   const app = await setUp();
   const o = oauth(app);
   const client = await o.newClient();
   const p = o.pkce();
   const res = await o.authorize(o.authorizeUrl(client, p));
   const id = new URL(res.headers.get('location'), o.origin).hash.replace('#/connect/', '');
-  const sarah = app.client();
-  await sarah.signIn('sarah');
-  assert.equal((await sarah.call('GET', `/oauth/requests/${id}`)).status, 403);
-  assert.equal((await sarah.call('POST', `/oauth/requests/${id}/approve`, { access: 'direct' })).status, 403);
   assert.equal((await app.client().call('GET', `/oauth/requests/${id}`)).status, 401);
   const view = (await app.owner.call('GET', `/oauth/requests/${id}`)).data;
   assert.deepEqual([view.clientName, view.redirectHost, view.defaultAccess], ['Claude', 'claude.ai', 'propose']);
@@ -196,6 +192,27 @@ test('only an Owner or Admin can look at or decide a request; cancel and expiry 
   app.db.prepare("UPDATE oauth_requests SET expires_at = '2000-01-01T00:00:00.000Z'").run();
   assert.equal((await app.owner.call('GET', `/oauth/requests/${id2}`)).status, 404);
   assert.equal((await app.owner.call('POST', `/oauth/requests/${id2}/approve`, { access: 'read' })).status, 404);
+  await app.close();
+});
+
+test('a team member connects their own AI; it acts as them and only they (or an Admin) can see or revoke it', async () => {
+  const app = await setUp();
+  const o = oauth(app);
+  const sarah = app.client();
+  await sarah.signIn('sarah');
+  const client = await o.newClient();
+  const p = o.pkce();
+  const t = (await o.exchange(client, (await o.connect(client, p, { who: sarah, access: 'direct' })).code, p)).data;
+  assert.equal((await o.mcpCall(t.access_token)).status, 200);
+  const mine = (await sarah.call('GET', '/api-keys')).data;
+  assert.deepEqual([mine.length, mine[0].ownerName, mine[0].kind], [1, 'Sarah', 'oauth']);
+  const other = app.client();
+  await other.signIn('mark');
+  assert.deepEqual((await other.call('GET', '/api-keys')).data, []);
+  assert.equal((await other.call('DELETE', `/api-keys/${mine[0].id}`)).status, 404);
+  assert.equal((await app.owner.call('GET', '/api-keys')).data.length, 1);
+  assert.equal((await sarah.call('DELETE', `/api-keys/${mine[0].id}`)).status, 200);
+  assert.equal((await o.mcpCall(t.access_token)).status, 401);
   await app.close();
 });
 

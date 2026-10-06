@@ -10,7 +10,9 @@ const perms = require('./permissions');
 const ACCESS = ['read', 'propose', 'direct'];
 const sha256 = (s) => crypto.createHash('sha256').update(s).digest('hex');
 const logCtx = (ctx) => ({ organizationId: ctx.organizationId, actorUserId: ctx.actor.id, source: ctx.source || 'web', ip: ctx.ip || null });
-const need = (ctx) => { if (!perms.can(ctx.actor.role, 'ai.manage')) throw new ServiceError(403, 'Not allowed'); };
+const need = (ctx) => { if (!perms.can(ctx.actor.role, 'ai.use')) throw new ServiceError(403, 'Not allowed'); };
+// Everyone sees and changes their own connections. Owner and Admin see all of the agency's.
+const seesAll = (ctx) => perms.can(ctx.actor.role, 'ai.manage');
 
 const SELECT = `
   SELECT k.id, k.name, k.access, k.prefix, k.kind, k.user_id AS userId, u.display_name AS ownerName,
@@ -19,15 +21,15 @@ const SELECT = `
    WHERE k.organization_id = ?`;
 const shape = (r) => ({ id: r.id, name: r.name, access: r.access, prefix: r.prefix, kind: r.kind, userId: r.userId, ownerName: r.ownerName, createdAt: r.createdAt, lastUsedAt: r.lastUsedAt, revoked: !!r.revokedAt });
 
-function find(db, organizationId, id) {
-  const row = db.prepare(`${SELECT} AND k.id = ?`).get(organizationId, Number(id));
-  if (!row) throw new ServiceError(404, 'Key not found');
+function find(db, ctx, id) {
+  const row = db.prepare(`${SELECT} AND k.id = ?`).get(ctx.organizationId, Number(id));
+  if (!row || (!seesAll(ctx) && row.userId !== ctx.actor.id)) throw new ServiceError(404, 'Key not found');
   return row;
 }
 
 function listKeys(db, ctx) {
   need(ctx);
-  return db.prepare(`${SELECT} ORDER BY k.id DESC`).all(ctx.organizationId).map(shape);
+  return db.prepare(`${SELECT} ${seesAll(ctx) ? '' : 'AND k.user_id = ?'} ORDER BY k.id DESC`).all(...(seesAll(ctx) ? [ctx.organizationId] : [ctx.organizationId, ctx.actor.id])).map(shape);
 }
 
 function createKey(db, ctx, input = {}) {
@@ -39,14 +41,14 @@ function createKey(db, ctx, input = {}) {
     const id = Number(db.prepare('INSERT INTO api_keys (organization_id, user_id, name, access, token_hash, prefix) VALUES (?, ?, ?, ?, ?, ?)').run(ctx.organizationId, ctx.actor.id, name, access, sha256(token), token.slice(0, 8)).lastInsertRowid);
     logActivity(db, { ...logCtx(ctx), action: 'apikey.create', objectType: 'api_key', objectId: id, after: { name, access } });
     // The token is returned here and nowhere else.
-    return { ...shape(find(db, ctx.organizationId, id)), token };
+    return { ...shape(find(db, ctx, id)), token };
   })();
 }
 
 function updateKey(db, ctx, id, patch = {}) {
   need(ctx);
   return db.transaction(() => {
-    const current = find(db, ctx.organizationId, id);
+    const current = find(db, ctx, id);
     if (current.revokedAt) throw new ServiceError(400, 'This key is revoked');
     const next = { name: current.name, access: current.access };
     if (patch.name !== undefined) next.name = cleanText(patch.name, 'Name', 1, 60);
@@ -55,14 +57,14 @@ function updateKey(db, ctx, id, patch = {}) {
     if (!d.changed) return shape(current);
     db.prepare('UPDATE api_keys SET name = ?, access = ? WHERE organization_id = ? AND id = ?').run(next.name, next.access, ctx.organizationId, current.id);
     logActivity(db, { ...logCtx(ctx), action: 'apikey.update', objectType: 'api_key', objectId: current.id, before: d.before, after: d.after });
-    return shape(find(db, ctx.organizationId, id));
+    return shape(find(db, ctx, id));
   })();
 }
 
 function revokeKey(db, ctx, id) {
   need(ctx);
   db.transaction(() => {
-    const current = find(db, ctx.organizationId, id);
+    const current = find(db, ctx, id);
     if (current.revokedAt) return;
     db.prepare("UPDATE api_keys SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE organization_id = ? AND id = ?").run(ctx.organizationId, current.id);
     logActivity(db, { ...logCtx(ctx), action: 'apikey.revoke', objectType: 'api_key', objectId: current.id, before: { name: current.name } });

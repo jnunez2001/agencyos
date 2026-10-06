@@ -154,21 +154,53 @@ test('if the data changed while it waited, approval fails cleanly and applies no
   assert.equal(plans.listProposals(f.db, f.josh, { status: 'failed' }).length, 1);
 });
 
-test('only Owner and Admin see and decide proposals, and only their own agency', async () => {
+test('Owner and Admin decide anyone\'s proposals; everyone else only their own; another agency none', async () => {
   const f = await fixture();
   const { auth } = keyFor(f, f.josh, 'propose');
   const { proposalId } = plans.submitPlan(f.db, auth, PLAN);
   for (const ctx of [f.mark, f.sarah, f.cole]) {
-    assert.throws(() => plans.listProposals(f.db, ctx, {}), /not allowed/i);
-    assert.throws(() => plans.approveProposal(f.db, ctx, proposalId), /not allowed/i);
-    assert.throws(() => plans.rejectProposal(f.db, ctx, proposalId), /not allowed/i);
+    assert.deepEqual(plans.listProposals(f.db, ctx, {}), []);
+    assert.throws(() => plans.approveProposal(f.db, ctx, proposalId), /not found/i);
+    assert.throws(() => plans.rejectProposal(f.db, ctx, proposalId), /not found/i);
+    assert.equal(plans.pendingCount(f.db, ctx), 0);
   }
   assert.deepEqual(plans.listProposals(f.db, f.zed, {}), []);
   assert.throws(() => plans.approveProposal(f.db, f.zed, proposalId), /not found/i);
   assert.throws(() => plans.rejectProposal(f.db, f.zed, proposalId), /not found/i);
   assert.equal(plans.pendingCount(f.db, f.josh), 1);
+  assert.equal(plans.pendingCount(f.db, f.rayne), 1);
   assert.equal(plans.pendingCount(f.db, f.zed), 0);
-  assert.equal(plans.pendingCount(f.db, f.mark), 0);
+});
+
+test('an Employee\'s AI works within the Employee\'s role and the Employee approves their own proposals', async () => {
+  const f = await fixture();
+  const c = clients.createClient(f.db, f.mark, { name: 'Acme' });
+  const p = projects.createProject(f.db, f.mark, { clientId: c.id, name: 'Site' });
+  const mine = tasks.createTask(f.db, f.mark, { projectId: p.id, title: 'Mine', assigneeId: f.ids.sarah });
+  const notMine = tasks.createTask(f.db, f.mark, { projectId: p.id, title: 'Not mine', assigneeId: f.ids.mark });
+  const { auth } = keyFor(f, f.sarah, 'propose');
+  // what Sarah could not do herself is refused when the plan is sent
+  assert.throws(() => plans.submitPlan(f.db, auth, { summary: 's', steps: [{ action: 'create_task', args: { projectId: p.id, title: 'x' } }] }), /Step 1.*not allowed/i);
+  assert.throws(() => plans.submitPlan(f.db, auth, { summary: 's', steps: [{ action: 'update_task', args: { id: notMine.id, status: 'done' } }] }), /Step 1/);
+  const { proposalId } = plans.submitPlan(f.db, auth, { summary: 'Finish my task', steps: [{ action: 'update_task', args: { id: mine.id, status: 'done' } }] });
+  assert.equal(plans.listProposals(f.db, f.sarah, { status: 'pending' }).length, 1);
+  assert.deepEqual(plans.listProposals(f.db, f.mark, {}), []);
+  assert.equal(plans.pendingCount(f.db, f.sarah), 1);
+  assert.equal(plans.approveProposal(f.db, f.sarah, proposalId).status, 'approved');
+  assert.equal(tasks.getTask(f.db, f.sarah, mine.id).status, 'done');
+});
+
+test('a Contractor\'s AI sees only the Contractor\'s own tasks', async () => {
+  const f = await fixture();
+  const c = clients.createClient(f.db, f.mark, { name: 'Acme' });
+  const p = projects.createProject(f.db, f.mark, { clientId: c.id, name: 'Site' });
+  tasks.createTask(f.db, f.mark, { projectId: p.id, title: 'Cole job', assigneeId: f.ids.cole });
+  tasks.createTask(f.db, f.mark, { projectId: p.id, title: 'Other job', assigneeId: f.ids.sarah });
+  const { auth } = keyFor(f, f.cole, 'read');
+  const mcp = require('../server/mcp');
+  const tool = (name) => { const t = mcp.TOOLS.find((x) => x.name === name); return t.run(f.db, { organizationId: auth.organizationId, actor: auth.actor, source: 'ai' }, {}); };
+  assert.deepEqual(tool('list_tasks').map((t) => t.title), ['Cole job']);
+  assert.throws(() => tool('list_clients'), /not allowed/i);
 });
 
 test('a key from another agency only ever touches its own agency', async () => {

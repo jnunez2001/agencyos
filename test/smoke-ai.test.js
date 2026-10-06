@@ -19,6 +19,27 @@ test('the Owner can use the AI inbox and keys without an error or stray text', a
 
   await app.go('#/ai');
   let text = app.main().textContent;
+  assert.match(text, /AI agent/);
+  assert.match(text, /MCP server address/);
+  assert.match(text, /http:\/\/localhost\/mcp/);
+  assert.match(text, /Claude on the web and phone/);
+  assert.match(text, /Add custom connector/);
+  clean('setup tab');
+  // create a personal key and get the setup prompt (there is no clipboard here, so it is shown to copy by hand)
+  const setupAccess = app.main().querySelector('select[name=setup-access]');
+  assert.equal(setupAccess.value, 'propose');
+  buttonWith(app.main(), 'Create key and copy setup prompt').click();
+  await app.wait(200);
+  const made = app.calls.find((c) => c.method === 'POST' && c.path === '/api-keys');
+  assert.deepEqual([made.body.name, made.body.access], ["Josh Nunez's agent", 'propose']);
+  const prompt = app.main().querySelector('textarea[aria-label="Setup prompt"]').value;
+  assert.match(prompt, /Server URL: http:\/\/localhost\/mcp/);
+  assert.match(prompt, /Authorization: Bearer aos_Qq77SecretSecretSecretSecretSecret/);
+  assert.match(prompt, /claude mcp add --transport http --scope user agencyos/);
+  clean('setup prompt');
+  buttonWith(app.main(), 'Inbox').click();
+  await app.wait(150);
+  text = app.main().textContent;
   assert.match(text, /Inbox \(1\)/);
   assert.match(text, /Set up Acme Dental/);
   assert.match(text, /Create project "New website" for "Acme Dental"/);
@@ -33,8 +54,8 @@ test('the Owner can use the AI inbox and keys without an error or stray text', a
   await app.wait(150);
   assert.ok(app.calls.some((c) => c.method === 'POST' && c.path === '/ai/proposals/2/reject'));
 
-  // keys
-  buttonWith(app.main(), 'Keys').click();
+  // connections
+  buttonWith(app.main(), 'Connections').click();
   await app.wait(150);
   text = app.main().textContent;
   assert.match(text, /Claude on my Mac/);
@@ -53,7 +74,7 @@ test('the Owner can use the AI inbox and keys without an error or stray text', a
   sheet.querySelector('input[name=name]').value = 'New';
   sheet.querySelector('form').requestSubmit();
   await app.wait(300);
-  const created = app.calls.find((c) => c.method === 'POST' && c.path === '/api-keys');
+  const created = app.calls.filter((c) => c.method === 'POST' && c.path === '/api-keys').pop();
   assert.deepEqual([created.body.name, created.body.access], ['New', 'propose']);
   sheet = document.querySelector('.sheet');
   assert.match(sheet.textContent, /shown only once/);

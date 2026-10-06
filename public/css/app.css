@@ -272,3 +272,5 @@ a.row:hover { background: var(--hover); }
 :root[data-theme="dark"] .pill.acc-propose, :root[data-theme="dark"] .pill.pp-pending { background: #3a2a0c; color: #fcd34d; }
 :root[data-theme="dark"] .pill.pp-approved { background: #10321d; color: #86efac; }
 :root[data-theme="dark"] .pill.acc-direct, :root[data-theme="dark"] .pill.pp-failed { background: #3b1414; color: #fca5a5; }
+.url-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.code.url { flex: 1; min-width: 0; margin: 0; word-break: break-all; font-size: 14px; }
