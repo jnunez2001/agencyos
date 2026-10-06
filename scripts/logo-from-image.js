@@ -66,6 +66,28 @@ function removeBackground({ w, h, px }, crop) {
   return { side, px: out };
 }
 
+const mixc = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+const PALETTES = {
+  light: { arm: [[51, 65, 85], [100, 116, 139]], blue: [[29, 78, 216], [96, 165, 250]] },
+  dark: { arm: [[100, 116, 139], [226, 232, 240]], blue: [[37, 99, 235], [147, 197, 253]] },
+  mid: { arm: [[71, 85, 105], [148, 163, 184]], blue: [[37, 99, 235], [96, 165, 250]] },
+};
+// Keeps the artwork's shading but swaps its colors: the lime part becomes blue, the pale part slate.
+function recolor({ side, px }, name) {
+  const pal = PALETTES[name]; const out = Buffer.from(px);
+  for (let i = 0; i < side * side * 4; i += 4) {
+    if (!out[i + 3]) continue;
+    const r = px[i]; const g = px[i + 1]; const b = px[i + 2];
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    const wl = smooth(40, 90, g - b);
+    const arm = mixc(pal.arm[0], pal.arm[1], Math.max(0, Math.min(1, (lum - 90) / 160)));
+    const blue = mixc(pal.blue[0], pal.blue[1], Math.max(0, Math.min(1, (lum - 110) / 125)));
+    const c = mixc(arm, blue, wl);
+    out[i] = c[0]; out[i + 1] = c[1]; out[i + 2] = c[2];
+  }
+  return { side, px: out };
+}
+
 function resize({ side, px }, n) {
   const out = Buffer.alloc(n * n * 4); const k = side / n;
   for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
@@ -86,5 +108,5 @@ const img = readPng(src);
 const crop = [Math.round(img.w * 0.185), Math.round(img.h * 0.2), Math.round(img.w * 0.815), Math.round(img.h * 0.785)];
 const mark = removeBackground(img, crop);
 const pub = path.join(__dirname, '..', 'public');
-for (const [name, n] of [['logo-512.png', 512], ['logo.png', 128], ['favicon.png', 64]]) writePng(path.join(pub, name), n, resize(mark, n));
-console.log('Wrote public/logo-512.png, public/logo.png and public/favicon.png');
+for (const [name, n, palette] of [['logo-512.png', 512, 'light'], ['logo.png', 128, 'light'], ['logo-dark.png', 128, 'dark'], ['favicon.png', 64, 'mid']]) writePng(path.join(pub, name), n, resize(recolor(mark, palette), n));
+console.log('Wrote public/logo-512.png, logo.png, logo-dark.png and favicon.png');

@@ -47,6 +47,9 @@ const ICONS = {
   key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/>',
 };
 
+// The logo that reads well on the current theme: slate and blue on light screens, paler on dark ones.
+export const logoSrc = () => (document.documentElement.getAttribute('data-theme') === 'dark' ? '/logo-dark.png' : '/logo.png');
+
 export function icon(name) {
   const span = document.createElement('span');
   span.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
