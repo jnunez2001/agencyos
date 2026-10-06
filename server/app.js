@@ -34,6 +34,7 @@ function createApp(db, { google = null } = {}) {
   // The privacy policy that Google asks for, at a plain address.
   // The home page Google asks for: public, says what the app does, and links to the privacy policy.
   app.get('/about', (req, res) => res.sendFile(path.join(config.root, 'public', 'about.html')));
+  app.get('/terms', (req, res) => res.sendFile(path.join(config.root, 'public', 'terms.html')));
   app.get('/privacy', (req, res) => res.sendFile(path.join(config.root, 'public', 'privacy.html')));
   app.get('*', (req, res) => res.sendFile(path.join(config.root, 'public', 'index.html')));
   return app;
