@@ -126,6 +126,7 @@ function weekPanel(session, entries, capacityHours, rerender) {
         h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Next week', onclick: go(() => { state.anchor = addDays(from, 7); }) }, icon('chevron')),
         h('button', { class: 'btn', type: 'button', onclick: go(() => { state.anchor = todayKey(); }) }, 'This week'))),
     h('p', { class: 'muted' }, `${duration(total)} logged${capacityHours ? ` of ${formatNumber(capacityHours)} h capacity` : ''}`),
+    entries.length === 0 ? h('p', { class: 'muted' }, 'No time logged this week. Start a timer or choose Add time.') : null,
     h('div', { class: 'week' }, days.map((k) => {
       const list = entries.filter((e) => e.date === k);
       const sum = list.reduce((s, e) => s + e.minutes, 0);

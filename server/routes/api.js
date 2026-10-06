@@ -37,6 +37,7 @@ const results = require('../services/results');
 const reports = require('../services/reports');
 const googlesync = require('../services/googlesync');
 const identities = require('../services/identities');
+const timeline = require('../services/timeline');
 const { ServiceError } = require('../services/errors');
 
 function idParam(req) {
@@ -154,7 +155,7 @@ module.exports = function apiRouter(db, { google = null } = {}) {
   r.get('/profile', (req, res) => res.json(profiles.getProfile(db, ctxOf(req), req.auth.user.id)));
   r.patch('/profile', (req, res) => res.json(profiles.updateProfile(db, ctxOf(req), req.auth.user.id, req.body)));
 
-  r.get('/activity', (req, res) => res.json(activity.listActivity(db, ctxOf(req), { actorId: req.query.actorId, action: req.query.action, limit: req.query.limit })));
+  r.get('/activity', (req, res) => res.json(activity.listActivity(db, ctxOf(req), { actorId: req.query.actorId, action: req.query.action, limit: req.query.limit, offset: req.query.offset })));
   r.get('/clients', (req, res) => res.json(clients.listClients(db, ctxOf(req), { status: req.query.status })));
   r.post('/clients', (req, res) => res.json(clients.createClient(db, ctxOf(req), req.body)));
   r.get('/clients/:id', (req, res) => res.json(clients.getClient(db, ctxOf(req), idParam(req))));
@@ -210,6 +211,7 @@ module.exports = function apiRouter(db, { google = null } = {}) {
   r.get('/tasks/:id', (req, res) => res.json(tasks.getTask(db, ctxOf(req), idParam(req))));
   r.patch('/tasks/:id', (req, res) => res.json(tasks.updateTask(db, ctxOf(req), idParam(req), req.body)));
   r.delete('/tasks/:id', (req, res) => res.json(tasks.deleteTask(db, ctxOf(req), idParam(req))));
+  r.get('/tasks/:id/trace', (req, res) => res.json(timeline.traceTask(db, ctxOf(req), idParam(req))));
   r.get('/tasks/:id/comments', (req, res) => res.json(tasks.listComments(db, ctxOf(req), idParam(req))));
   r.post('/tasks/:id/comments', (req, res) => res.json(tasks.addComment(db, ctxOf(req), idParam(req), req.body)));
 
@@ -234,6 +236,7 @@ module.exports = function apiRouter(db, { google = null } = {}) {
   r.put('/clients/:id/google', mw.wrap(async (req, res) => res.json(await googlesync.connect(db, ctxOf(req), google, idParam(req), req.body))));
   r.post('/clients/:id/google/sync', mw.wrap(async (req, res) => res.json(await googlesync.sync(db, ctxOf(req), google, idParam(req), { months: req.body && req.body.months }))));
   r.delete('/clients/:id/google', (req, res) => res.json(googlesync.disconnect(db, ctxOf(req), idParam(req))));
+  r.get('/clients/:id/timeline', (req, res) => res.json(timeline.clientTimeline(db, ctxOf(req), idParam(req), { days: req.query.days })));
   r.get('/clients/:id/results', (req, res) => res.json(results.listResults(db, ctxOf(req), idParam(req), { metric: req.query.metric, from: req.query.from, to: req.query.to })));
   r.get('/clients/:id/metrics', (req, res) => res.json(results.metricsSummary(db, ctxOf(req), idParam(req))));
   r.post('/clients/:id/results', (req, res) => res.json(results.recordResult(db, ctxOf(req), idParam(req), req.body)));

@@ -9,6 +9,7 @@ const projects = require('./projects');
 const tasks = require('./tasks');
 const perms = require('./permissions');
 const notifications = require('./notifications');
+const { pageOf } = require('./paging');
 
 const STATUSES = ['new', 'reviewing', 'approved', 'in_progress', 'waiting', 'completed', 'rejected'];
 const STAFF_STATUSES = ['new', 'reviewing'];
@@ -45,7 +46,7 @@ function find(db, ctx, id) {
 
 function getRequest(db, ctx, id) { need(ctx, 'requests.view'); return shape(ctx, find(db, ctx, id)); }
 
-function listRequests(db, ctx, { clientId, projectId, status, open, q } = {}) {
+function listRequests(db, ctx, { clientId, projectId, status, open, q, limit, offset } = {}) {
   need(ctx, 'requests.view');
   const where = []; const params = [ctx.organizationId];
   if (clientId) { where.push('r.client_id = ?'); params.push(Number(clientId)); }
@@ -53,7 +54,8 @@ function listRequests(db, ctx, { clientId, projectId, status, open, q } = {}) {
   if (status) { cleanEnum(status, STATUSES, 'status'); where.push('r.status = ?'); params.push(status); }
   if (open) where.push("r.status NOT IN ('completed','rejected')");
   if (q) { where.push("r.title LIKE ? ESCAPE '\\'"); params.push(`%${String(q).replace(/[\\%_]/g, '\\$&')}%`); }
-  return db.prepare(`${SELECT} ${where.map((w) => `AND ${w}`).join(' ')} ORDER BY r.id DESC LIMIT 300`).all(...params).map((r) => shape(ctx, r));
+  const page = pageOf({ limit, offset }, 300);
+  return db.prepare(`${SELECT} ${where.map((w) => `AND ${w}`).join(' ')} ORDER BY r.id DESC LIMIT ? OFFSET ?`).all(...params, page.limit, page.offset).map((r) => shape(ctx, r));
 }
 
 function cleanLinks(db, ctx, clientId, projectId) {

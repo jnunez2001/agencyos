@@ -10,6 +10,7 @@ const projects = require('./projects');
 const tasks = require('./tasks');
 const { today } = require('./dates');
 const perms = require('./permissions');
+const { pageOf } = require('./paging');
 
 const TYPES = ['billable', 'non_billable', 'internal', 'meeting', 'training', 'admin'];
 const STATUSES = ['draft', 'submitted', 'approved', 'rejected', 'locked'];
@@ -198,7 +199,7 @@ function deleteEntry(db, ctx, id) {
   })();
 }
 
-function listEntries(db, ctx, { from, to, userId, status, clientId, projectId, taskId, timeType, mine } = {}) {
+function listEntries(db, ctx, { from, to, userId, status, clientId, projectId, taskId, timeType, mine, limit, offset } = {}) {
   need(ctx, 'time.log');
   const where = []; const params = [ctx.organizationId];
   const start = cleanDate(from, 'From'); const end = cleanDate(to, 'To');
@@ -210,7 +211,8 @@ function listEntries(db, ctx, { from, to, userId, status, clientId, projectId, t
   if (clientId) { where.push('e.client_id = ?'); params.push(Number(clientId)); }
   if (projectId) { where.push('e.project_id = ?'); params.push(Number(projectId)); }
   if (taskId) { where.push('e.task_id = ?'); params.push(Number(taskId)); }
-  return db.prepare(`${SELECT} ${where.map((w) => `AND ${w}`).join(' ')}${scope(ctx)} ORDER BY e.entry_date, e.id LIMIT 1000`).all(...params, ...scopeParams(ctx)).map((r) => shape(ctx, r));
+  const page = pageOf({ limit, offset }, 1000);
+  return db.prepare(`${SELECT} ${where.map((w) => `AND ${w}`).join(' ')}${scope(ctx)} ORDER BY e.entry_date, e.id LIMIT ? OFFSET ?`).all(...params, ...scopeParams(ctx), page.limit, page.offset).map((r) => shape(ctx, r));
 }
 
 // ---- the timer ----

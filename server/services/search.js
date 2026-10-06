@@ -14,6 +14,7 @@ const requests = require('./requests');
 const decisions = require('./decisions');
 const followups = require('./followups');
 const members = require('./members');
+const reports = require('./reports');
 
 const MIN_LENGTH = 2;
 const MAX_LENGTH = 100;
@@ -64,6 +65,8 @@ function search(db, ctx, q, { limit } = {}) {
     .map((s) => ({ type: 'sop', id: s.id, title: s.title, subtitle: join(s.service, label(s.status)), hash: `#/sops/${s.id}` })));
   add('note', 'Meeting notes', 'notes.view', () => meetingnotes.listNotes(db, ctx, { q: text })
     .map((n) => ({ type: 'note', id: n.id, title: n.title, subtitle: join(n.meetingDate, n.clientName), hash: `#/meetings/${n.id}` })));
+  add('report', 'Reports', 'reports.view', () => reports.listReports(db, ctx).filter((r) => match(r.title, r.clientName))
+    .map((r) => ({ type: 'report', id: r.id, title: r.title, subtitle: join(r.clientName, label(r.status)), hash: `#/reports/${r.id}` })));
   add('request', 'Client requests', 'requests.view', () => requests.listRequests(db, ctx, { q: text })
     .map((r) => ({ type: 'request', id: r.id, title: r.title, subtitle: join(r.clientName, label(r.status)), hash: `#/requests/${r.id}` })));
   add('decision', 'Decisions', 'decisions.view', () => decisions.listDecisions(db, ctx, { q: text })

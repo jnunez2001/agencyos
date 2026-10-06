@@ -2,15 +2,17 @@
 // Clients: the list, a client page with goals, contacts and projects, and the forms.
 import { h, icon, openSheet, goAfterSheets } from '../dom.js';
 import { api } from '../api.js';
-import { field, selectField, textareaField, sheetForm, confirmButton, pill, formatDay, formatWhen, formatNumber, sparkline, CLIENT_STATUS_LABEL, GOAL_STATUS_LABEL } from '../ui.js';
+import { emptyNote, field, selectField, textareaField, sheetForm, confirmButton, pill, formatDay, formatWhen, formatNumber, sparkline, CLIENT_STATUS_LABEL, GOAL_STATUS_LABEL } from '../ui.js';
 import { projectPill, openProjectForm } from './projects.js';
 import { reportPill, openReportForm, openGenerate } from './reports.js';
+import { activityPanel } from './trace.js';
 
 export const clientPill = (s) => pill('cs', s, CLIENT_STATUS_LABEL[s] || s);
 const goalPill = (s) => pill('gs', s, GOAL_STATUS_LABEL[s] || s);
 const CURRENT = ['lead', 'onboarding', 'active', 'at_risk'];
 const FILTERS = { current: ['Current', (c) => CURRENT.includes(c.status)], paused: ['Paused', (c) => c.status === 'paused'], past: ['Past', (c) => ['completed', 'archived'].includes(c.status)], all: ['All', () => true] };
 let statusFilter = 'current';
+let activityDays = 7;
 
 export async function openClientForm(session, client, onChanged) {
   const [services, members] = await Promise.all([session.can['services.view'] ? api('GET', '/services') : [], api('GET', '/members')]);
@@ -228,13 +230,14 @@ function retainerPanel(session, clientId, data, rerender) {
 }
 
 async function clientPage(session, id, rerender) {
-  const [c, metrics, reports, googleStatus, googleLink, retainer] = await Promise.all([
+  const [c, metrics, reports, googleStatus, googleLink, retainer, timeline] = await Promise.all([
     api('GET', `/clients/${id}`),
     session.can['results.view'] ? api('GET', `/clients/${id}/metrics`) : [],
     session.can['reports.view'] ? api('GET', `/reports?clientId=${id}`) : [],
     session.can['results.view'] ? api('GET', '/integrations/google') : { configured: false },
     session.can['results.view'] ? api('GET', `/clients/${id}/google`) : null,
     session.can['retainers.view'] ? api('GET', `/clients/${id}/retainer`) : null,
+    session.can['clients.view'] ? api('GET', `/clients/${id}/timeline?days=${activityDays}`).catch(() => null) : null,
   ]);
   const manage = session.can['clients.manage'];
   const facts = h('dl', { class: 'facts' },
@@ -254,6 +257,7 @@ async function clientPage(session, id, rerender) {
     h('div', { class: 'split' },
       h('section', { class: 'panel' }, h('div', { class: 'panel-head' }, h('h2', {}, 'Details')), c.notes && h('p', { class: 'prose' }, c.notes), facts),
       h('div', { class: 'stack' },
+        timeline && activityPanel(timeline, activityDays, (d) => { activityDays = d; rerender(); }),
         h('section', { class: 'panel' },
           h('div', { class: 'panel-head' }, h('h2', {}, 'Goals'), manage && h('button', { class: 'btn-text', type: 'button', onclick: () => openGoalForm(session, c.id, null, rerender).catch((e) => alert(e.message)) }, 'Add goal')),
           c.goals.length ? h('div', { class: 'goals' }, c.goals.map((g) => goalCard(session, c.id, g, rerender))) : h('p', { class: 'muted' }, 'No goals yet.')),
@@ -288,7 +292,7 @@ export async function clientsView(session, { param, rerender }) {
       session.can['clients.manage'] && h('button', { class: 'btn btn-primary', type: 'button', onclick: () => openClientForm(session, null, rerender).catch((e) => alert(e.message)) }, icon('plus'), 'New client')),
     h('div', { class: 'chips' }, Object.keys(FILTERS).map(chip)),
     shown.length === 0
-      ? h('section', { class: 'panel' }, h('p', { class: 'muted' }, 'No clients here.'))
+      ? h('section', { class: 'panel' }, emptyNote(list.length > 0, session.can['clients.manage'] ? 'No clients yet. Add your first client to start organizing agency work.' : 'No clients yet.'))
       : h('section', { class: 'panel list' }, shown.map((c) => h('a', { class: 'row', href: `#/clients/${c.id}` },
         h('div', { class: 'grow' }, h('div', { class: 'row-title' }, c.name), h('div', { class: 'row-sub' }, [c.services.map((s) => s.name).join(', '), c.industry, c.website].filter(Boolean).join(' · '))),
         h('span', { class: 'muted nowrap' }, `${c.openProjects} open projects`), clientPill(c.status), icon('chevron')))));

@@ -120,6 +120,11 @@ export function confirmButton(label, confirmLabel, action) {
 
 export { openSheet };
 
+// What an empty list says. A list that has records but shows none because of the filters says so; a list that
+// has nothing at all says what to do next.
+export const NO_MATCH = 'Nothing matches these filters.';
+export const emptyNote = (filtered, message, { pad = false } = {}) => h('p', { class: `muted${pad ? ' pad' : ''}` }, filtered ? NO_MATCH : message);
+
 // A small trend line for a series of numbers (oldest first). Drawn as SVG from script, so no inline styles are needed.
 export function sparkline(values, { width = 120, height = 32 } = {}) {
   const NS = 'http://www.w3.org/2000/svg';

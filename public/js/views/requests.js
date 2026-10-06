@@ -2,7 +2,8 @@
 // Client requests: the list, a request page with its status and Convert to Task, and the add and edit form.
 import { h, icon, openSheet, goAfterSheets } from '../dom.js';
 import { api } from '../api.js';
-import { field, selectField, textareaField, sheetForm, confirmButton, pill, formatDay } from '../ui.js';
+import { traceSection } from './trace.js';
+import { emptyNote, field, selectField, textareaField, sheetForm, confirmButton, pill, formatDay } from '../ui.js';
 
 export const REQUEST_STATUS_LABEL = { new: 'New', reviewing: 'Reviewing', approved: 'Approved', in_progress: 'In progress', waiting: 'Waiting', completed: 'Completed', rejected: 'Rejected' };
 const STAFF_STATUSES = ['new', 'reviewing'];
@@ -59,6 +60,9 @@ async function openConvert(session, request, onDone) {
 
 async function requestPage(session, id, rerender) {
   const r = await api('GET', `/requests/${id}`);
+  // The chain behind a request: its meeting note, and once converted the whole trace of its task.
+  const trace = r.taskId ? await api('GET', `/tasks/${r.taskId}/trace`).catch(() => null) : null;
+  const where = trace || (r.sourceNoteId ? { meetingNote: { id: r.sourceNoteId, title: r.sourceNoteTitle || 'Meeting notes', date: null, hash: `#/meetings/${r.sourceNoteId}` } } : {});
   const act = (fn) => async () => { try { await fn(); await rerender(); } catch (e) { alert(e.message); } };
   const facts = h('dl', { class: 'facts' },
     h('dt', {}, 'Client'), h('dd', {}, session.can['clients.view'] ? h('a', { class: 'link', href: `#/clients/${r.clientId}` }, r.clientName) : r.clientName),
@@ -78,7 +82,7 @@ async function requestPage(session, id, rerender) {
         r.canEdit && h('button', { class: 'btn', type: 'button', onclick: () => openRequestForm(session, { request: r }, rerender).catch((e) => alert(e.message)) }, 'Edit'),
         r.canConvert && h('button', { class: 'btn btn-primary', type: 'button', onclick: () => openConvert(session, r, rerender).catch((e) => alert(e.message)) }, 'Convert to task'),
         r.canManage && confirmButton('Delete', 'Confirm delete', async () => { try { await api('DELETE', `/requests/${r.id}`); goAfterSheets('#/requests'); } catch (e) { alert(e.message); } }))),
-    h('section', { class: 'panel' }, r.description && h('p', { class: 'prose' }, r.description), facts, statusSelect && statusSelect.el));
+    h('section', { class: 'panel' }, r.description && h('p', { class: 'prose' }, r.description), facts, statusSelect && statusSelect.el, traceSection(session, { ...where, request: null })));
 }
 
 export async function requestsView(session, { param, rerender }) {
@@ -96,5 +100,5 @@ export async function requestsView(session, { param, rerender }) {
     chips, h('div', { class: 'filters' }, pick),
     h('section', { class: 'panel list' }, list.length ? list.map((r) => h('a', { class: 'row', href: `#/requests/${r.id}` },
       h('div', { class: 'grow' }, h('div', { class: 'row-title' }, r.title), h('div', { class: 'row-sub' }, [r.clientName, r.requestedBy && `asked by ${r.requestedBy}`, r.taskId && 'has a task'].filter(Boolean).join(', '))),
-      requestPill(r.status), icon('chevron'))) : h('p', { class: 'muted pad' }, 'No requests yet. They come from meeting notes, or add one here.')));
+      requestPill(r.status), icon('chevron'))) : emptyNote(!!filters.clientId, `${filters.show === 'open' ? 'No open requests.' : 'No requests yet.'} ${session.can['requests.create'] ? 'Add one here, or write them in a meeting note and choose Create records.' : 'They come from meeting notes.'}`, { pad: true })));
 }

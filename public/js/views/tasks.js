@@ -2,7 +2,8 @@
 // Tasks: the list and board, the task sheet with comments, and the add and edit form.
 import { h, icon, openSheet } from '../dom.js';
 import { api } from '../api.js';
-import { avatar, field, selectField, textareaField, sheetForm, confirmButton, statusPill, priorityPill, dueLabel, formatDay, formatWhen, pill, STATUS_LABEL, PRIORITY_LABEL, QA_RESULT_LABEL } from '../ui.js';
+import { traceSection } from './trace.js';
+import { emptyNote, avatar, field, selectField, textareaField, sheetForm, confirmButton, statusPill, priorityPill, dueLabel, formatDay, formatWhen, pill, STATUS_LABEL, PRIORITY_LABEL, QA_RESULT_LABEL } from '../ui.js';
 
 const STATUSES = Object.keys(STATUS_LABEL);
 let view = 'list';
@@ -55,7 +56,7 @@ function qaBlock(task) {
 }
 
 export async function openTask(session, taskId, onChanged) {
-  const task = await api('GET', `/tasks/${taskId}`);
+  const [task, trace] = await Promise.all([api('GET', `/tasks/${taskId}`), api('GET', `/tasks/${taskId}/trace`).catch(() => null)]);
   openSheet(task.title, (close) => {
     const facts = h('dl', { class: 'facts' },
       h('dt', {}, 'Project'), h('dd', {}, `${task.projectName}, ${task.clientName}`),
@@ -96,7 +97,7 @@ export async function openTask(session, taskId, onChanged) {
     return h('div', { class: 'sheet-body' },
       h('div', { class: 'row-between' }, statusPill(task.status), h('div', { class: 'foot-actions' }, session.can['time.log'] && h('button', { class: 'btn', type: 'button', onclick: () => { close(); import('./time.js').then((m) => m.openEntryForm(session, { taskId: task.id }, onChanged)).catch((e) => alert(e.message)); } }, 'Log time'), task.canEdit && h('button', { class: 'btn', type: 'button', onclick: () => { close(); openTaskForm(session, { task }, onChanged).catch((e) => alert(e.message)); } }, 'Edit'))),
       task.description && h('p', { class: 'prose' }, task.description),
-      facts, sopBlock(session, task), status.el, h('div', { class: 'sheet-actions left' }, submit, review), error, qaBlock(task),
+      facts, traceSection(session, trace, { close }), sopBlock(session, task), status.el, h('div', { class: 'sheet-actions left' }, submit, review), error, qaBlock(task),
       h('h3', { class: 'section-title' }, 'Comments'), comments, form);
   });
 }
@@ -205,7 +206,7 @@ export async function tasksView(session, { param, rerender }) {
       session.can['tasks.manage'] && h('button', { class: 'btn btn-primary', type: 'button', onclick: () => openTaskForm(session, {}, rerender).catch((e) => alert(e.message)) }, icon('plus'), 'New task')),
     toolbar,
     list.length === 0
-      ? h('section', { class: 'panel' }, h('p', { class: 'muted' }, 'No tasks match.'))
+      ? h('section', { class: 'panel' }, emptyNote(Object.values(filter).some(Boolean), session.can['tasks.manage'] ? 'No tasks yet. Create your first task.' : session.can['clients.view'] ? 'No tasks yet.' : 'Nothing is assigned to you yet.'))
       : view === 'board' ? boardView(session, list, rerender)
         : h('section', { class: 'panel list' }, list.map((t) => taskRow(session, t, rerender))));
 }

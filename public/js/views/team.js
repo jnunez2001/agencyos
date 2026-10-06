@@ -80,5 +80,5 @@ export async function teamView(session, { rerender }) {
   return h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('h1', { class: 'page-title' }, 'Team'),
       session.can['members.create'] && h('button', { class: 'btn btn-primary', type: 'button', onclick: () => openAddMember(session, rerender, !!status.googleSignIn) }, icon('plus'), 'Add member')),
-    h('section', { class: 'panel list' }, list.map(row)));
+    list.length ? h('section', { class: 'panel list' }, list.map(row)) : h('section', { class: 'panel' }, h('p', { class: 'muted' }, session.can['members.create'] ? 'No team members yet. Add the first person.' : 'No team members yet.')));
 }

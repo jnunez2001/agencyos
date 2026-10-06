@@ -2,7 +2,7 @@
 // Meeting notes: the list, a note page, and the write form. A note may belong to a calendar event.
 import { h, icon, openSheet, goAfterSheets } from '../dom.js';
 import { api } from '../api.js';
-import { field, selectField, textareaField, sheetForm, confirmButton, pill, formatDay } from '../ui.js';
+import { emptyNote, field, selectField, textareaField, sheetForm, confirmButton, pill, formatDay } from '../ui.js';
 import { tabBar, decisionsPage, followUpsPage } from './records.js';
 
 const STATUS_LABEL = { draft: 'Draft', final: 'Final' };
@@ -99,5 +99,5 @@ export async function meetingsView(session, { param, rerender }) {
     h('div', { class: 'filters' }, search, clientPick),
     h('section', { class: 'panel list' }, list.length ? list.map((n) => h('a', { class: 'row', href: `#/meetings/${n.id}` },
       h('div', { class: 'grow' }, h('div', { class: 'row-title' }, n.title), h('div', { class: 'row-sub' }, [formatDay(n.meetingDate), n.clientName].filter(Boolean).join(', '))),
-      statusPill(n.status), icon('chevron'))) : h('p', { class: 'muted pad' }, 'No meeting notes yet. Open an event on the calendar and choose Add meeting notes.')));
+      statusPill(n.status), icon('chevron'))) : emptyNote(Object.values(filters).some(Boolean), 'No meeting notes yet. Open an event on the calendar and choose Add meeting notes.', { pad: true })));
 }

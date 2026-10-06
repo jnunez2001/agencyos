@@ -8,11 +8,13 @@ const clients = require('./clients');
 const projects = require('./projects');
 const events = require('./events');
 const perms = require('./permissions');
+const { pageOf } = require('./paging');
 
 const STATUSES = ['draft', 'final'];
 const SECTIONS = { transcript: ['Transcript', 100000], summary: ['Summary', 5000], agenda: ['Agenda', 10000], discussion: ['Discussion', 20000], decisions: ['Decisions', 10000], requests: ['Requests', 10000], followUps: ['Follow-ups', 10000] };
 const FIELDS = ['title', 'meetingDate', 'status', 'eventId', 'clientId', 'projectId', ...Object.keys(SECTIONS)];
 
+const SEARCHED = ['n.title', 'n.summary', 'n.discussion', 'n.decisions', 'n.requests', 'n.follow_ups'];
 const logCtx = (ctx) => ({ organizationId: ctx.organizationId, actorUserId: ctx.actor.id, source: ctx.source || 'web', ip: ctx.ip || null });
 const need = (ctx, action) => { if (!perms.can(ctx.actor.role, action)) throw new ServiceError(403, 'Not allowed'); };
 const manages = (ctx) => perms.can(ctx.actor.role, 'notes.manage');
@@ -59,7 +61,7 @@ function getNote(db, ctx, id) {
   return shape(db, ctx, find(db, ctx, id));
 }
 
-function listNotes(db, ctx, { clientId, projectId, status, q, from, to } = {}) {
+function listNotes(db, ctx, { clientId, projectId, status, q, from, to, limit, offset } = {}) {
   need(ctx, 'notes.view');
   const where = []; const params = [ctx.organizationId];
   if (clientId) { where.push('n.client_id = ?'); params.push(Number(clientId)); }
@@ -67,8 +69,10 @@ function listNotes(db, ctx, { clientId, projectId, status, q, from, to } = {}) {
   if (status) { cleanEnum(status, STATUSES, 'status'); where.push('n.status = ?'); params.push(status); }
   if (from) { where.push('n.meeting_date >= ?'); params.push(cleanDate(from, 'From')); }
   if (to) { where.push('n.meeting_date <= ?'); params.push(cleanDate(to, 'To')); }
-  if (q) { where.push("(n.title LIKE ? ESCAPE '\\' OR n.summary LIKE ? ESCAPE '\\')"); const like = `%${String(q).replace(/[\\%_]/g, '\\$&')}%`; params.push(like, like); }
-  const rows = db.prepare(`${SELECT} ${where.map((w) => `AND ${w}`).join(' ')}${visibility(ctx)} ORDER BY n.meeting_date DESC, n.id DESC LIMIT 200`).all(...params, ...visibilityParams(ctx));
+  // The text of the note is searched too (discussion, decisions, requests and follow-ups), never the raw transcript.
+  if (q) { where.push(`(${SEARCHED.map((c) => `${c} LIKE ? ESCAPE '\\'`).join(' OR ')})`); const like = `%${String(q).replace(/[\\%_]/g, '\\$&')}%`; for (let i = 0; i < SEARCHED.length; i += 1) params.push(like); }
+  const page = pageOf({ limit, offset }, 200);
+  const rows = db.prepare(`${SELECT} ${where.map((w) => `AND ${w}`).join(' ')}${visibility(ctx)} ORDER BY n.meeting_date DESC, n.id DESC LIMIT ? OFFSET ?`).all(...params, ...visibilityParams(ctx), page.limit, page.offset);
   return rows.map((r) => {
     // The list leaves the long sections out; open a note for them.
     const { agenda, discussion, decisions, requests, followUps, transcript, ...short } = shape(db, ctx, r);

@@ -9,6 +9,7 @@ const projects = require('./projects');
 const { today } = require('./dates');
 const perms = require('./permissions');
 const notifications = require('./notifications');
+const { pageOf } = require('./paging');
 
 const STATUSES = ['open', 'done', 'cancelled'];
 const FIELDS = ['title', 'details', 'dueDate', 'assigneeId', 'status', 'clientId', 'projectId'];
@@ -46,7 +47,7 @@ function find(db, ctx, id) {
 }
 function getFollowUp(db, ctx, id) { need(ctx, 'followups.view'); return shape(db, ctx, find(db, ctx, id)); }
 
-function listFollowUps(db, ctx, { clientId, projectId, status, assigneeId, mine, overdue, q } = {}) {
+function listFollowUps(db, ctx, { clientId, projectId, status, assigneeId, mine, overdue, q, limit, offset } = {}) {
   need(ctx, 'followups.view');
   const where = []; const params = [ctx.organizationId];
   if (clientId) { where.push('f.client_id = ?'); params.push(Number(clientId)); }
@@ -56,7 +57,8 @@ function listFollowUps(db, ctx, { clientId, projectId, status, assigneeId, mine,
   if (mine) { where.push('f.assignee_id = ?'); params.push(ctx.actor.id); }
   if (overdue) { where.push("f.status = 'open' AND f.due_date < ?"); params.push(today(db, ctx)); }
   if (q) { where.push("f.title LIKE ? ESCAPE '\\'"); params.push(`%${String(q).replace(/[\\%_]/g, '\\$&')}%`); }
-  return db.prepare(`${SELECT} ${where.map((w) => `AND ${w}`).join(' ')}${scope(ctx)} ORDER BY (f.status != 'open'), f.due_date IS NULL, f.due_date, f.id DESC LIMIT 300`).all(...params, ...scopeParams(ctx)).map((r) => shape(db, ctx, r));
+  const page = pageOf({ limit, offset }, 300);
+  return db.prepare(`${SELECT} ${where.map((w) => `AND ${w}`).join(' ')}${scope(ctx)} ORDER BY (f.status != 'open'), f.due_date IS NULL, f.due_date, f.id DESC LIMIT ? OFFSET ?`).all(...params, ...scopeParams(ctx), page.limit, page.offset).map((r) => shape(db, ctx, r));
 }
 
 function cleanLinks(db, ctx, clientId, projectId) {
