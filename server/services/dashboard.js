@@ -25,7 +25,7 @@ function getDashboard(db, ctx) {
   if (perms.can(ctx.actor.role, 'dashboard.agency')) {
     const one = (sql, ...params) => db.prepare(sql).get(ctx.organizationId, ...params).n;
     agency = {
-      activeClients: one("SELECT COUNT(*) AS n FROM clients WHERE organization_id = ? AND status = 'active'"),
+      activeClients: one("SELECT COUNT(*) AS n FROM clients WHERE organization_id = ? AND status IN ('active','onboarding','at_risk')"),
       activeProjects: one("SELECT COUNT(*) AS n FROM projects WHERE organization_id = ? AND status = 'active'"),
       openTasks: one("SELECT COUNT(*) AS n FROM tasks WHERE organization_id = ? AND status != 'done'"),
       overdueTasks: one("SELECT COUNT(*) AS n FROM tasks WHERE organization_id = ? AND status != 'done' AND due_date IS NOT NULL AND due_date < ?", todayDate),

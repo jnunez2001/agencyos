@@ -24,6 +24,8 @@ const MATRIX = {
   'tasks.manage': [1, 1, 1, 0, 0],
   'tasks.work': [1, 1, 1, 1, 1],
   'dashboard.agency': [1, 1, 1, 1, 0],
+  'services.view': [1, 1, 1, 1, 0],
+  'services.manage': [1, 1, 0, 0, 0],
   'sops.view': [1, 1, 1, 1, 0],
   'sops.manage': [1, 1, 1, 0, 0],
   'qa.review': [1, 1, 1, 0, 0],

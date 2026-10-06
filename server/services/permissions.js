@@ -29,6 +29,9 @@ const ACTIONS = {
   // Change the status of a task assigned to you, and comment on a task you can see.
   'tasks.work': ALL,
   'dashboard.agency': NOT_CONTRACTOR,
+  // The agency's list of services. Everyone but a Contractor reads it; Owner and Admin change it.
+  'services.view': NOT_CONTRACTOR,
+  'services.manage': OWNER_ADMIN,
   // SOPs: managers write them, staff read the ones in use. A Contractor sees only the SOP on their own task.
   'sops.view': NOT_CONTRACTOR,
   'sops.manage': MANAGERS,

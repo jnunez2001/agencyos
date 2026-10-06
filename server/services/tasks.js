@@ -7,11 +7,12 @@ const { cleanText, cleanOptional, cleanEnum, cleanDate, cleanTeamMember, diff } 
 const { today } = require('./dates');
 const sops = require('./sops');
 const qarecords = require('./qarecords');
+const goals = require('./goals');
 const perms = require('./permissions');
 
 const STATUSES = ['todo', 'in_progress', 'review', 'changes', 'done'];
 const PRIORITIES = ['low', 'normal', 'high', 'urgent'];
-const FIELDS = ['title', 'description', 'status', 'priority', 'assigneeId', 'dueDate', 'estimateHours', 'projectId', 'sopId', 'sopVersionId', 'qaRequired'];
+const FIELDS = ['title', 'description', 'status', 'priority', 'assigneeId', 'dueDate', 'estimateHours', 'projectId', 'sopId', 'sopVersionId', 'qaRequired', 'goalId'];
 
 const logCtx = (ctx) => ({ organizationId: ctx.organizationId, actorUserId: ctx.actor.id, source: ctx.source || 'web', ip: ctx.ip || null });
 const need = (ctx, action) => { if (!perms.can(ctx.actor.role, action)) throw new ServiceError(403, 'Not allowed'); };
@@ -22,21 +23,25 @@ const SELECT = `
          t.title, t.description, t.status, t.priority, t.assignee_id AS assigneeId, au.display_name AS assigneeName,
          t.due_date AS dueDate, t.estimate_hours AS estimateHours, t.completed_at AS completedAt,
          t.created_at AS createdAt, t.updated_at AS updatedAt,
-         t.sop_id AS sopId, sp.title AS sopTitle, t.sop_version_id AS sopVersionId, sv.major AS sopMajor, sv.minor AS sopMinor, t.qa_required AS qaRequired
+         t.sop_id AS sopId, sp.title AS sopTitle, t.sop_version_id AS sopVersionId, sv.major AS sopMajor, sv.minor AS sopMinor, t.qa_required AS qaRequired,
+         t.goal_id AS goalId, COALESCE(tg.title, pg.title) AS goalTitle, (t.goal_id IS NULL AND p.goal_id IS NOT NULL) AS goalInherited, p.client_id AS projectClientId
     FROM tasks t
     JOIN projects p ON p.id = t.project_id AND p.organization_id = t.organization_id
     JOIN clients c ON c.id = p.client_id AND c.organization_id = p.organization_id
     LEFT JOIN users au ON au.id = t.assignee_id
     LEFT JOIN sops sp ON sp.id = t.sop_id AND sp.organization_id = t.organization_id
     LEFT JOIN sop_versions sv ON sv.id = t.sop_version_id
+    LEFT JOIN client_goals tg ON tg.id = t.goal_id
+    LEFT JOIN client_goals pg ON pg.id = p.goal_id
    WHERE t.organization_id = ?`;
 
 function shape(db, ctx, row, todayDate) {
   const manage = perms.can(ctx.actor.role, 'tasks.manage');
-  const { projectStatus, sopMajor, sopMinor, ...rest } = row;
+  const { projectStatus, sopMajor, sopMinor, projectClientId, ...rest } = row;
   return {
     ...rest,
     qaRequired: !!row.qaRequired,
+    goalInherited: !!row.goalInherited,
     sopVersion: sopMajor == null ? null : `${sopMajor}.${sopMinor}`,
     isOverdue: !!(row.dueDate && row.status !== 'done' && row.dueDate < todayDate),
     // What this viewer may do with it, so the screens never need their own copy of the rule.
@@ -135,12 +140,14 @@ function createTask(db, ctx, input = {}) {
       estimateHours: cleanEstimate(input.estimateHours),
     };
     const sop = input.sopId == null || input.sopId === '' ? null : sops.forAttach(db, ctx.organizationId, input.sopId);
+    const clientId = db.prepare('SELECT client_id AS id FROM projects WHERE organization_id = ? AND id = ?').get(ctx.organizationId, next.projectId).id;
+    const goalId = input.goalId == null || input.goalId === '' ? null : goals.checkLinkable(db, ctx.organizationId, input.goalId, clientId);
     const qaRequired = input.qaRequired !== undefined ? !!input.qaRequired : !!(sop && sop.requiresQa);
     checkStatusMove(null, next.status, qaRequired);
     const id = Number(db.prepare(
-      `INSERT INTO tasks (organization_id, project_id, title, description, status, priority, assignee_id, due_date, estimate_hours, completed_at, created_by, sop_id, sop_version_id, qa_required)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${next.status === 'done' ? "strftime('%Y-%m-%dT%H:%M:%fZ','now')" : 'NULL'}, ?, ?, ?, ?)`
-    ).run(ctx.organizationId, next.projectId, next.title, next.description, next.status, next.priority, next.assigneeId, next.dueDate, next.estimateHours, ctx.actor.id, sop ? sop.id : null, sop ? sop.versionId : null, qaRequired ? 1 : 0).lastInsertRowid);
+      `INSERT INTO tasks (organization_id, project_id, title, description, status, priority, assignee_id, due_date, estimate_hours, completed_at, created_by, sop_id, sop_version_id, qa_required, goal_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ${next.status === 'done' ? "strftime('%Y-%m-%dT%H:%M:%fZ','now')" : 'NULL'}, ?, ?, ?, ?, ?)`
+    ).run(ctx.organizationId, next.projectId, next.title, next.description, next.status, next.priority, next.assigneeId, next.dueDate, next.estimateHours, ctx.actor.id, sop ? sop.id : null, sop ? sop.versionId : null, qaRequired ? 1 : 0, goalId).lastInsertRowid);
     logActivity(db, { ...logCtx(ctx), action: 'task.create', objectType: 'task', objectId: id, after: { title: next.title, projectId: next.projectId, assigneeId: next.assigneeId, ...(sop ? { sopId: sop.id } : {}) } });
     if (next.status === 'review') enterReview(db, ctx, id);
     return shape(db, ctx, find(db, ctx, id), today(db, ctx));
@@ -176,16 +183,21 @@ function updateTask(db, ctx, id, patch = {}) {
     } else if (patch.sopLatest && row.sopId) {
       next.sopVersionId = sops.forAttach(db, ctx.organizationId, row.sopId).versionId;
     }
+    if (patch.goalId !== undefined || (next.projectId !== current.projectId && next.goalId)) {
+      const clientId = db.prepare('SELECT client_id AS id FROM projects WHERE organization_id = ? AND id = ?').get(ctx.organizationId, next.projectId).id;
+      if (patch.goalId !== undefined) next.goalId = patch.goalId == null || patch.goalId === '' ? null : goals.checkLinkable(db, ctx.organizationId, patch.goalId, clientId, current.goalId);
+      else if (db.prepare('SELECT client_id AS id FROM client_goals WHERE organization_id = ? AND id = ?').get(ctx.organizationId, next.goalId).id !== clientId) throw new ServiceError(400, 'The goal must belong to the same client. Choose another goal for the new project');
+    }
     checkStatusMove(current.status, next.status, next.qaRequired);
     const d = diff(current, next, FIELDS);
     if (!d.changed) return shape(db, ctx, row, today(db, ctx));
     const completed = d.after.status ? (next.status === 'done' ? "strftime('%Y-%m-%dT%H:%M:%fZ','now')" : 'NULL') : 'completed_at';
     db.prepare(
       `UPDATE tasks SET project_id = ?, title = ?, description = ?, status = ?, priority = ?, assignee_id = ?, due_date = ?, estimate_hours = ?,
-              sop_id = ?, sop_version_id = ?, qa_required = ?,
+              sop_id = ?, sop_version_id = ?, qa_required = ?, goal_id = ?,
               completed_at = ${completed}, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
         WHERE organization_id = ? AND id = ?`
-    ).run(next.projectId, next.title, next.description, next.status, next.priority, next.assigneeId, next.dueDate, next.estimateHours, next.sopId, next.sopVersionId, next.qaRequired ? 1 : 0, ctx.organizationId, row.id);
+    ).run(next.projectId, next.title, next.description, next.status, next.priority, next.assigneeId, next.dueDate, next.estimateHours, next.sopId, next.sopVersionId, next.qaRequired ? 1 : 0, next.goalId, ctx.organizationId, row.id);
     logActivity(db, { ...logCtx(ctx), action: 'task.update', objectType: 'task', objectId: row.id, before: d.before, after: d.after });
     if (d.after.status) {
       if (current.status === 'review') qarecords.withdrawPending(db, ctx.organizationId, row.id);
