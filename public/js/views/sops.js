@@ -143,8 +143,9 @@ export async function sopsView(session, { param, rerender }) {
   const statuses = session.can['sops.manage'] ? STATUSES : ['approved', 'testing', 'deprecated'];
   return h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('h1', { class: 'page-title' }, 'SOPs'),
-      session.can['sopchanges.view'] && h('a', { class: 'btn', href: '#/sops/changes' }, 'Change requests'),
-      session.can['sops.manage'] && h('button', { class: 'btn btn-primary', type: 'button', onclick: () => openNewSop(session, async (made) => goAfterSheets(`#/sops/${made.id}`)).catch((e) => alert(e.message)) }, icon('plus'), 'New SOP')),
+      h('div', { class: 'head-actions' },
+        session.can['sopchanges.view'] && h('a', { class: 'btn', href: '#/sops/changes' }, 'Change requests'),
+        session.can['sops.manage'] && h('button', { class: 'btn btn-primary', type: 'button', onclick: () => openNewSop(session, async (made) => goAfterSheets(`#/sops/${made.id}`)).catch((e) => alert(e.message)) }, icon('plus'), 'New SOP'))),
     h('div', { class: 'chips' }, statuses.map((s) => chip(s, SOP_STATUS_LABEL[s])), chip('all', 'All')),
     box.el,
     list.length === 0
