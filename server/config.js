@@ -15,6 +15,8 @@ module.exports = {
   publicUrl: (process.env.PUBLIC_URL || '').replace(/\/+$/, ''),
   // The Google service account key file (see deploy/set-google-key.sh). Empty means Google is not set up.
   googleKeyFile: process.env.GOOGLE_KEY_FILE || '',
+  // The Google OAuth client (id and secret) for "Add Google account" (see deploy/set-google-oauth.sh).
+  googleOAuthFile: process.env.GOOGLE_OAUTH_FILE || '',
   // When set, first-run setup also needs this code. Protects a fresh server that is already reachable online.
   setupToken: process.env.SETUP_TOKEN || '',
   sessionDays: Number(process.env.SESSION_DAYS || 14),

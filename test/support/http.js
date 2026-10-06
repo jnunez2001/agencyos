@@ -8,7 +8,8 @@ const PASSWORD = 'correct horse battery';
 // A running app on a free port, with a tiny client that keeps the session cookie and the CSRF token.
 async function boot(options = {}) {
   const db = openDb(':memory:');
-  const server = await new Promise((resolve) => { const s = createApp(db, options).listen(0, '127.0.0.1', () => resolve(s)); });
+  const google = typeof options.google === 'function' ? options.google(db) : options.google; // a function gets the database
+  const server = await new Promise((resolve) => { const s = createApp(db, { ...options, google }).listen(0, '127.0.0.1', () => resolve(s)); });
   const base = `http://127.0.0.1:${server.address().port}/api`;
   const client = () => {
     let cookie = '';
@@ -20,8 +21,10 @@ async function boot(options = {}) {
       const data = await res.json().catch(() => null);
       return raw ? { res, data } : { status: res.status, data };
     };
+    // A plain request with this session's cookie, without following redirects (for the Google callback).
+    const raw = (method, path) => fetch(base + path, { method, redirect: 'manual', headers: cookie ? { cookie } : {} });
     return {
-      call,
+      call, raw,
       async signIn(username, password = PASSWORD) { const r = await call('POST', '/login', { username, password }); const s = await call('GET', '/session'); csrf = s.data && s.data.csrf; return r; },
     };
   };

@@ -126,3 +126,72 @@ test('the key file is loaded and checked; a missing or broken file means Google 
   fs.writeFileSync(incomplete, JSON.stringify({ client_email: 'x@y.z' }));
   assert.equal(loadGoogle(incomplete), null);
 });
+
+// ---- a person's Google account (sign in with Google) ----
+
+const { createOAuthGoogle, authUrl, exchangeCode, revokeToken } = require('../server/google');
+const APP = { clientId: 'client-123.apps.googleusercontent.com', clientSecret: 'shh-secret' };
+
+test('the sign-in address asks for read-only access with a long-lasting token, and carries the state', () => {
+  const u = new URL(authUrl({ ...APP, redirectUri: 'https://agency.example/api/integrations/google/callback', state: 'abc123' }));
+  assert.equal(u.origin + u.pathname, 'https://accounts.google.com/o/oauth2/v2/auth');
+  const q = u.searchParams;
+  assert.deepEqual([q.get('client_id'), q.get('redirect_uri'), q.get('response_type'), q.get('state'), q.get('access_type'), q.get('prompt')], [APP.clientId, 'https://agency.example/api/integrations/google/callback', 'code', 'abc123', 'offline', 'consent']);
+  const scopes = q.get('scope').split(' ');
+  assert.ok(scopes.includes('https://www.googleapis.com/auth/webmasters.readonly') && scopes.includes('https://www.googleapis.com/auth/analytics.readonly') && scopes.includes('openid') && scopes.includes('email'));
+  assert.ok(scopes.every((s) => !/webmasters$|analytics$|analytics\.edit/.test(s))); // nothing that can change data
+});
+
+test('the code is exchanged for a refresh token and the account email', async () => {
+  const f = fake({
+    'oauth2.googleapis.com/token': { body: { access_token: 'at-1', refresh_token: 'rt-1', scope: 'https://www.googleapis.com/auth/webmasters.readonly https://www.googleapis.com/auth/analytics.readonly openid email' } },
+    'openidconnect.googleapis.com/v1/userinfo': { body: { email: 'josh@example.com' } },
+  });
+  const out = await exchangeCode({ ...APP, redirectUri: 'https://agency.example/cb', code: 'the-code', fetchImpl: f.fetchImpl });
+  assert.deepEqual(out, { refreshToken: 'rt-1', email: 'josh@example.com' });
+  const form = new URLSearchParams(f.calls[0].body);
+  assert.deepEqual([form.get('grant_type'), form.get('code'), form.get('client_id'), form.get('client_secret'), form.get('redirect_uri')], ['authorization_code', 'the-code', APP.clientId, APP.clientSecret, 'https://agency.example/cb']);
+  assert.equal(f.calls[1].headers.authorization, 'Bearer at-1');
+});
+
+test('a sign-in that Google or the person cuts short is explained', async () => {
+  const run = (handlers) => exchangeCode({ ...APP, redirectUri: 'x', code: 'c', fetchImpl: fake(handlers).fetchImpl });
+  await assert.rejects(() => run({ 'oauth2.googleapis.com/token': { status: 400, body: { error: 'invalid_grant' } } }), /did not accept the sign-in/i);
+  await assert.rejects(() => run({ 'oauth2.googleapis.com/token': { body: { access_token: 'a', scope: 'email' } } }), /long-lasting/i);
+  await assert.rejects(() => run({ 'oauth2.googleapis.com/token': { body: { access_token: 'a', refresh_token: 'r', scope: 'openid email' } } }), /not approved/i);
+  await assert.rejects(() => run({ 'oauth2.googleapis.com/token': { body: { access_token: 'a', refresh_token: 'r', scope: 'https://www.googleapis.com/auth/analytics.readonly' } }, 'userinfo': { status: 401, body: {} } }), /which account/i);
+  await assert.rejects(() => exchangeCode({ ...APP, redirectUri: 'x', code: 'c', fetchImpl: async () => { throw new Error('down'); } }), /could not reach google/i);
+});
+
+test('an account works from its refresh token, reuses the access token, and says plainly when it cannot see something', async () => {
+  let t = 5_000_000_000_000;
+  const f = fake({ 'oauth2.googleapis.com/token': { body: { access_token: 'at-9', expires_in: 3600 } }, 'searchAnalytics': { status: 403, body: {} }, 'webmasters/v3/sites': { body: { siteEntry: [{ siteUrl: 'sc-domain:acme.example', permissionLevel: 'siteOwner' }] } } });
+  const g = createOAuthGoogle({ ...APP, refreshToken: 'rt-7', email: 'josh@example.com', fetchImpl: f.fetchImpl, now: () => t });
+  assert.equal(g.email, 'josh@example.com');
+  assert.equal((await g.listSites()).length, 1);
+  await g.listSites();
+  const tokenCalls = f.calls.filter((c) => c.url.includes('oauth2.googleapis.com/token'));
+  assert.equal(tokenCalls.length, 1);
+  const form = new URLSearchParams(tokenCalls[0].body);
+  assert.deepEqual([form.get('grant_type'), form.get('refresh_token'), form.get('client_id'), form.get('client_secret')], ['refresh_token', 'rt-7', APP.clientId, APP.clientSecret]);
+  await assert.rejects(() => g.searchAnalytics('sc-domain:acme.example', { startDate: '2026-09-01', endDate: '2026-09-30' }), /josh@example\.com cannot see that property/);
+  t += 3_550_000;
+  await g.listSites();
+  assert.equal(f.calls.filter((c) => c.url.includes('oauth2.googleapis.com/token')).length, 2);
+});
+
+test('withdrawn access is reported once and explained', async () => {
+  let reported = 0;
+  const g = createOAuthGoogle({ ...APP, refreshToken: 'rt', email: 'josh@example.com', onInvalid: () => { reported += 1; }, fetchImpl: fake({ 'oauth2.googleapis.com/token': { status: 400, body: { error: 'invalid_grant' } } }).fetchImpl });
+  await assert.rejects(() => g.listSites(), /withdrawn or has expired.*Reconnect/i);
+  assert.equal(reported, 1);
+  const wrongSecret = createOAuthGoogle({ ...APP, refreshToken: 'rt', email: 'x@y.z', fetchImpl: fake({ 'oauth2.googleapis.com/token': { status: 401, body: { error: 'invalid_client' } } }).fetchImpl });
+  await assert.rejects(() => wrongSecret.listSites(), /sign-in settings/i);
+});
+
+test('removing an account tells Google to drop the token, and never fails the caller', async () => {
+  const f = fake({ 'oauth2.googleapis.com/revoke': { body: {} } });
+  await revokeToken('rt-1', f.fetchImpl);
+  assert.equal(new URLSearchParams(f.calls[0].body).get('token'), 'rt-1');
+  await revokeToken('rt-1', async () => { throw new Error('down'); }); // no throw
+});

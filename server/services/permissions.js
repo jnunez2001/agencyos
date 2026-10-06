@@ -31,6 +31,8 @@ const ACTIONS = {
   'dashboard.agency': NOT_CONTRACTOR,
   // Connecting a client's Google Search Console and Analytics. Managers and above.
   'integrations.manage': MANAGERS,
+  // Adding or removing a Google account for the whole agency.
+  'integrations.accounts': OWNER_ADMIN,
   // Results are recorded by staff. Reports are written and approved by managers; staff read them.
   'results.view': NOT_CONTRACTOR,
   'results.record': NOT_CONTRACTOR,

@@ -107,7 +107,22 @@ module.exports = function apiRouter(db, { google = null } = {}) {
   r.get('/tasks/:id/comments', (req, res) => res.json(tasks.listComments(db, ctxOf(req), idParam(req))));
   r.post('/tasks/:id/comments', (req, res) => res.json(tasks.addComment(db, ctxOf(req), idParam(req), req.body)));
 
-  r.get('/integrations/google', (req, res) => res.json(googlesync.status(db, ctxOf(req), google)));
+  r.get('/integrations/google', (req, res) => res.json(googlesync.overview(db, ctxOf(req), google)));
+  r.get('/integrations/google/choices', mw.wrap(async (req, res) => res.json(await googlesync.choices(db, ctxOf(req), google))));
+  r.post('/integrations/google/accounts/start', (req, res) => res.json(googlesync.startSignIn(db, ctxOf(req), google, { origin: originOf(req), returnTo: req.body && req.body.returnTo })));
+  r.delete('/integrations/google/accounts/:id', mw.wrap(async (req, res) => res.json(await googlesync.removeAccount(db, ctxOf(req), google, idParam(req)))));
+  // Google sends the person back here after they approve. The page they land on says how it went.
+  r.get('/integrations/google/callback', mw.wrap(async (req, res) => {
+    if (req.query.error) return res.redirect(302, '/#/google/failed/denied');
+    try {
+      const out = await googlesync.finishSignIn(db, ctxOf(req), google, { origin: originOf(req), code: String(req.query.code || ''), state: String(req.query.state || '') });
+      return res.redirect(302, `/#/google/ok/${out.returnTo}`);
+    } catch (err) {
+      if (!(err instanceof ServiceError)) throw err;
+      const code = err.status === 403 ? 'forbidden' : err.status === 502 ? 'google' : /not set up/i.test(err.message) ? 'setup' : 'expired';
+      return res.redirect(302, `/#/google/failed/${code}`);
+    }
+  }));
   r.get('/integrations/google/available', mw.wrap(async (req, res) => res.json(await googlesync.available(db, ctxOf(req), google))));
   r.get('/clients/:id/google', (req, res) => res.json(googlesync.getLink(db, ctxOf(req), idParam(req))));
   r.put('/clients/:id/google', mw.wrap(async (req, res) => res.json(await googlesync.connect(db, ctxOf(req), google, idParam(req), req.body))));

@@ -37,10 +37,12 @@ const rows = (f, where = '') => f.db.prepare(`SELECT metric, value, unit, record
 
 test('status says whether Google is set up, and shows the account email only to people who connect clients', async () => {
   const f = await setup();
-  assert.deepEqual(gs.status(f.db, f.mark, f.google), { configured: true, email: EMAIL });
-  assert.deepEqual(gs.status(f.db, f.sarah, f.google), { configured: true, email: null });
-  assert.deepEqual(gs.status(f.db, f.mark, null), { configured: false, email: null });
-  assert.throws(() => gs.status(f.db, f.cole, f.google), /not allowed/i);
+  const full = (email, accounts = false) => ({ configured: true, email, serviceAccount: { configured: true, email }, signIn: { configured: false }, accounts: [], canManageAccounts: accounts });
+  assert.deepEqual(gs.overview(f.db, f.mark, f.google), full(EMAIL));
+  assert.deepEqual(gs.overview(f.db, f.rayne, f.google), full(EMAIL, true));
+  assert.deepEqual(gs.overview(f.db, f.sarah, f.google), full(null));
+  assert.deepEqual(gs.overview(f.db, f.mark, null), { configured: false, email: null, serviceAccount: { configured: false, email: null }, signIn: { configured: false }, accounts: [], canManageAccounts: false });
+  assert.throws(() => gs.overview(f.db, f.cole, f.google), /not allowed/i);
 });
 
 test('only Manager and above connect, choose, sync and disconnect; staff can see the connection', async () => {

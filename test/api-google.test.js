@@ -24,8 +24,9 @@ test('Google over HTTP: status, choose, connect, numbers appear, sync, disconnec
   const cole = app.client(); await cole.signIn('cole');
   const c = (await mark.call('POST', '/clients', { name: 'Acme' })).data;
 
-  assert.deepEqual((await mark.call('GET', '/integrations/google')).data, { configured: true, email: EMAIL });
-  assert.deepEqual((await sarah.call('GET', '/integrations/google')).data, { configured: true, email: null });
+  const seen = (await mark.call('GET', '/integrations/google')).data;
+  assert.deepEqual([seen.configured, seen.email, seen.serviceAccount, seen.signIn, seen.accounts], [true, EMAIL, { configured: true, email: EMAIL }, { configured: false }, []]);
+  assert.deepEqual([(await sarah.call('GET', '/integrations/google')).data.configured, (await sarah.call('GET', '/integrations/google')).data.email], [true, null]);
   assert.equal((await cole.call('GET', '/integrations/google')).status, 403);
   assert.equal((await sarah.call('GET', '/integrations/google/available')).status, 403);
   const avail = (await mark.call('GET', '/integrations/google/available')).data;
@@ -71,7 +72,8 @@ test('a Google problem comes back as a plain message, and a server without a key
   await app.close();
 
   const none = await setUp();
-  assert.deepEqual((await none.owner.call('GET', '/integrations/google')).data, { configured: false, email: null });
+  const off = (await none.owner.call('GET', '/integrations/google')).data;
+  assert.deepEqual([off.configured, off.email, off.signIn], [false, null, { configured: false }]);
   assert.equal((await none.owner.call('GET', '/integrations/google/available')).status, 400);
   assert.equal((await none.owner.call('PUT', '/clients/1/google', { ga4PropertyId: '1' })).status, 400);
   await none.close();

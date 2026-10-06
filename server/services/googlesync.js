@@ -21,6 +21,14 @@ const GA4_METRICS = [['Sessions', (d) => d.sessions, ''], ['Organic sessions', (
 
 const need = (ctx, action) => { if (!perms.can(ctx.actor.role, action)) throw new ServiceError(403, 'Not allowed'); };
 const needGoogle = (google) => { if (!google) throw new ServiceError(400, 'Google is not set up on this server'); };
+
+// Everything below works with a "hub" of Google credentials (the service account and any connected accounts). A plain
+// Google client, as used by older callers and tests, is treated as a hub with only the service account.
+function asHub(google) {
+  if (!google) return { get: () => null, serviceEmail: null, serviceConfigured: false, oauthConfigured: false, listAccounts: () => [] };
+  if (typeof google.get === 'function') return google;
+  return { get: (source) => (source === 'service' || source === null || source === undefined ? google : null), serviceEmail: google.email, serviceConfigured: true, oauthConfigured: false, listAccounts: () => [] };
+}
 const logCtx = (ctx) => ({ organizationId: ctx.organizationId, actorUserId: ctx.actor.id, source: ctx.source || 'web', ip: ctx.ip || null });
 
 function findClient(db, organizationId, clientId) {
@@ -30,10 +38,13 @@ function findClient(db, organizationId, clientId) {
 }
 
 const linkRow = (db, organizationId, clientId) => db.prepare(
-  `SELECT g.*, u.display_name AS connectedByName FROM client_google g LEFT JOIN users u ON u.id = g.connected_by WHERE g.organization_id = ? AND g.client_id = ?`
+  `SELECT g.*, u.display_name AS connectedByName, a.email AS accountEmail
+     FROM client_google g LEFT JOIN users u ON u.id = g.connected_by LEFT JOIN google_accounts a ON a.id = g.google_account_id
+    WHERE g.organization_id = ? AND g.client_id = ?`
 ).get(organizationId, Number(clientId)) || null;
 
-const shape = (g) => g && ({ gscSiteUrl: g.gsc_site_url, ga4PropertyId: g.ga4_property_id, connectedAt: g.connected_at, connectedByName: g.connectedByName, lastSyncAt: g.last_sync_at, lastSyncStatus: g.last_sync_status, lastSyncError: g.last_sync_error });
+const sourceOf = (g) => (g.google_account_id ? String(g.google_account_id) : 'service');
+const shape = (g) => g && ({ source: sourceOf(g), accountEmail: g.accountEmail || null, gscSiteUrl: g.gsc_site_url, ga4PropertyId: g.ga4_property_id, connectedAt: g.connected_at, connectedByName: g.connectedByName, lastSyncAt: g.last_sync_at, lastSyncStatus: g.last_sync_status, lastSyncError: g.last_sync_error });
 
 async function viaGoogle(fn) {
   try { return await fn(); } catch (err) {
@@ -42,9 +53,20 @@ async function viaGoogle(fn) {
   }
 }
 
-function status(db, ctx, google) {
+// What the screens need to know about Google on this server. Addresses and accounts are for people who connect clients.
+function overview(db, ctx, google) {
   need(ctx, 'results.view');
-  return { configured: !!google, email: google && perms.can(ctx.actor.role, 'integrations.manage') ? google.email : null };
+  const hub = asHub(google);
+  const manage = perms.can(ctx.actor.role, 'integrations.manage');
+  const accounts = hub.listAccounts(ctx.organizationId);
+  return {
+    configured: hub.serviceConfigured || accounts.length > 0,
+    email: manage ? hub.serviceEmail : null,
+    serviceAccount: { configured: hub.serviceConfigured, email: manage ? hub.serviceEmail : null },
+    signIn: { configured: hub.oauthConfigured },
+    accounts: manage ? accounts.map((a) => ({ id: a.id, email: a.email, status: a.status, clients: a.clients, connectedByName: a.connectedByName })) : [],
+    canManageAccounts: perms.can(ctx.actor.role, 'integrations.accounts'),
+  };
 }
 
 function getLink(db, ctx, clientId) {
@@ -57,10 +79,55 @@ function getLink(db, ctx, clientId) {
 async function available(db, ctx, google) {
   need(ctx, 'integrations.manage');
   needGoogle(google);
+  const service = asHub(google).get('service');
+  if (!service) throw new ServiceError(400, 'Google is not set up on this server');
   const problems = [];
   const attempt = async (fn, label) => { try { return await fn(); } catch (err) { if (!(err instanceof GoogleError)) throw err; problems.push(`${label}: ${err.message}`); return []; } };
-  const [sites, properties] = await Promise.all([attempt(() => google.listSites(), 'Search Console'), attempt(() => google.listProperties(), 'Google Analytics')]);
+  const [sites, properties] = await Promise.all([attempt(() => service.listSites(), 'Search Console'), attempt(() => service.listProperties(), 'Google Analytics')]);
   return problems.length ? { sites, properties, problems } : { sites, properties };
+}
+
+// Everything each credential can see, grouped by account, for the person choosing a site and a property.
+async function choices(db, ctx, google) {
+  need(ctx, 'integrations.manage');
+  const hub = asHub(google);
+  const entries = [];
+  if (hub.serviceConfigured) entries.push({ source: 'service', label: `Service account (${hub.serviceEmail})`, kind: 'service', status: 'ok' });
+  for (const a of hub.listAccounts(ctx.organizationId)) entries.push({ source: String(a.id), label: a.email, kind: 'account', status: a.status });
+  return Promise.all(entries.map(async (e) => {
+    const client = hub.get(e.source, ctx.organizationId);
+    const problems = [];
+    const attempt = async (fn, label) => { try { return await fn(); } catch (err) { if (!(err instanceof GoogleError)) throw err; problems.push(`${label}: ${err.message}`); return []; } };
+    if (!client) return { ...e, sites: [], properties: [], problems: ['This account cannot be used. Reconnect it in Settings'] };
+    const [sites, properties] = await Promise.all([attempt(() => client.listSites(), 'Search Console'), attempt(() => client.listProperties(), 'Google Analytics')]);
+    return { ...e, sites, properties, problems };
+  }));
+}
+
+// Signing in with Google, to add an account. Owner and Admin only.
+function startSignIn(db, ctx, google, { origin, returnTo } = {}) {
+  need(ctx, 'integrations.accounts');
+  const hub = asHub(google);
+  if (!hub.startSignIn) throw new ServiceError(400, 'Signing in with Google is not set up on this server');
+  return { url: hub.startSignIn({ origin, userId: ctx.actor.id, organizationId: ctx.organizationId, returnTo }) };
+}
+
+async function finishSignIn(db, ctx, google, { origin, code, state } = {}) {
+  need(ctx, 'integrations.accounts');
+  const hub = asHub(google);
+  if (!hub.finishSignIn) throw new ServiceError(400, 'Signing in with Google is not set up on this server');
+  const out = await viaGoogle(() => hub.finishSignIn({ origin, code, state, userId: ctx.actor.id, organizationId: ctx.organizationId }));
+  logActivity(db, { ...logCtx(ctx), action: 'integration.account_add', objectType: 'google_account', objectId: out.accountId, after: { email: out.email, reconnected: out.reconnected } });
+  return out;
+}
+
+async function removeAccount(db, ctx, google, accountId) {
+  need(ctx, 'integrations.accounts');
+  const hub = asHub(google);
+  if (!hub.removeAccount) throw new ServiceError(400, 'Signing in with Google is not set up on this server');
+  const out = await hub.removeAccount(ctx.organizationId, accountId);
+  logActivity(db, { ...logCtx(ctx), action: 'integration.account_remove', objectType: 'google_account', objectId: Number(accountId), before: { email: out.email }, after: { disconnectedClients: out.disconnected } });
+  return out;
 }
 
 // ---- months ----
@@ -86,13 +153,16 @@ function upsert(db, { organizationId, clientId, metric, value, unit, recordedOn,
 // The sync itself. Returns { status, months, recorded, errors }. A source that fails is not retried for the other
 // months, and the other source carries on.
 async function runSync(db, google, { organizationId, clientId, today, months, actorId, source, now = new Date() }) {
+  const hub = asHub(google);
   const link = linkRow(db, organizationId, clientId);
+  const google_ = hub.get(sourceOf(link), organizationId);
   const list = completedMonths(today, months);
   let recorded = 0;
   const errors = [];
 
   const pull = async (sourceKey, label, enabled, metrics, fetchMonth) => {
     if (!enabled) return;
+    if (!google_) { errors.push({ source: sourceKey, message: `${label}: This client\'s Google account is no longer available. Connect it again` }); return; }
     for (const month of list) {
       let data;
       try { data = await fetchMonth(month); } catch (err) {
@@ -109,8 +179,8 @@ async function runSync(db, google, { organizationId, clientId, today, months, ac
       })();
     }
   };
-  await pull('gsc', 'Search Console', !!link.gsc_site_url, GSC_METRICS, (m) => google.searchAnalytics(link.gsc_site_url, { startDate: m.start, endDate: m.end }));
-  await pull('ga4', 'Google Analytics', !!link.ga4_property_id, GA4_METRICS, (m) => google.ga4Totals(link.ga4_property_id, { startDate: m.start, endDate: m.end }));
+  await pull('gsc', 'Search Console', !!link.gsc_site_url, GSC_METRICS, (m) => google_.searchAnalytics(link.gsc_site_url, { startDate: m.start, endDate: m.end }));
+  await pull('ga4', 'Google Analytics', !!link.ga4_property_id, GA4_METRICS, (m) => google_.ga4Totals(link.ga4_property_id, { startDate: m.start, endDate: m.end }));
 
   const configured = (link.gsc_site_url ? 1 : 0) + (link.ga4_property_id ? 1 : 0);
   const outcome = errors.length === 0 ? 'ok' : errors.length < configured ? 'partial' : 'failed';
@@ -140,20 +210,31 @@ async function sync(db, ctx, google, clientId, { months } = {}) {
 async function connect(db, ctx, google, clientId, input = {}) {
   need(ctx, 'integrations.manage');
   needGoogle(google);
+  const hub = asHub(google);
   const client = findClient(db, ctx.organizationId, clientId);
+  const wanted = input.source === undefined || input.source === null || input.source === '' ? 'service' : String(input.source);
+  let accountId = null;
+  if (wanted !== 'service') {
+    const account = hub.listAccounts(ctx.organizationId).find((a) => String(a.id) === wanted);
+    if (!account) throw new ServiceError(400, 'Choose a connected Google account');
+    accountId = account.id;
+  }
+  const credential = hub.get(wanted, ctx.organizationId);
+  if (!credential) throw new ServiceError(400, wanted === 'service' ? 'Google is not set up on this server' : 'That Google account cannot be used. Reconnect it in Settings');
+  const shared = (what) => (wanted === 'service' ? `That ${what} is not shared with ${credential.email}` : `That ${what} is not available to ${credential.email}`);
   const site = typeof input.gscSiteUrl === 'string' && input.gscSiteUrl.trim() ? input.gscSiteUrl.trim() : null;
   const property = input.ga4PropertyId === undefined || input.ga4PropertyId === null || String(input.ga4PropertyId).trim() === '' ? null : String(input.ga4PropertyId).trim();
   if (!site && !property) throw new ServiceError(400, 'Choose a Search Console site or an Analytics property');
   if (site && site.length > 300) throw new ServiceError(400, 'That site address is too long');
   if (property && !/^\d+$/.test(property)) throw new ServiceError(400, 'The Analytics property id must be a number');
   // Only what Google can actually see is accepted, so a typo or a missing share is caught here.
-  const seen = await viaGoogle(async () => ({ sites: site ? await google.listSites() : [], properties: property ? await google.listProperties() : [] }));
-  if (site && !seen.sites.some((s) => s.siteUrl === site)) throw new ServiceError(400, `That Search Console site is not shared with ${google.email}`);
-  if (property && !seen.properties.some((p) => p.id === property)) throw new ServiceError(400, `That Analytics property is not shared with ${google.email}`);
+  const seen = await viaGoogle(async () => ({ sites: site ? await credential.listSites() : [], properties: property ? await credential.listProperties() : [] }));
+  if (site && !seen.sites.some((s) => s.siteUrl === site)) throw new ServiceError(400, shared('Search Console site'));
+  if (property && !seen.properties.some((p) => p.id === property)) throw new ServiceError(400, shared('Analytics property'));
   db.transaction(() => {
     db.prepare('DELETE FROM client_google WHERE client_id = ?').run(client.id);
-    db.prepare('INSERT INTO client_google (client_id, organization_id, gsc_site_url, ga4_property_id, connected_by) VALUES (?, ?, ?, ?, ?)').run(client.id, ctx.organizationId, site, property, ctx.actor.id);
-    logActivity(db, { ...logCtx(ctx), action: 'integration.connect', objectType: 'client', objectId: client.id, after: { gscSiteUrl: site, ga4PropertyId: property } });
+    db.prepare('INSERT INTO client_google (client_id, organization_id, gsc_site_url, ga4_property_id, connected_by, google_account_id) VALUES (?, ?, ?, ?, ?, ?)').run(client.id, ctx.organizationId, site, property, ctx.actor.id, accountId);
+    logActivity(db, { ...logCtx(ctx), action: 'integration.connect', objectType: 'client', objectId: client.id, after: { gscSiteUrl: site, ga4PropertyId: property, account: accountId ? credential.email : 'service account' } });
   })();
   const result = await sync(db, ctx, google, client.id, { months: FIRST_SYNC_MONTHS });
   return { link: shape(linkRow(db, ctx.organizationId, client.id)), sync: result };
@@ -188,4 +269,4 @@ async function syncDue(db, google, { now = new Date(), today } = {}) {
   return { clients: done };
 }
 
-module.exports = { status, getLink, available, connect, sync, disconnect, syncDue, completedMonths };
+module.exports = { overview, getLink, available, choices, startSignIn, finishSignIn, removeAccount, connect, sync, disconnect, syncDue, completedMonths };
