@@ -5,7 +5,7 @@ const { can, ROLES, RANK, canManage, assignableRoles } = require('../server/serv
 
 const roles = ['owner', 'admin', 'manager', 'employee', 'contractor'];
 
-// The matrix from the spec (docs/specs/2026-10-06-phase-1-foundation.md).
+// The matrix from the spec (docs/specs/2026-10-06-phase-1-foundation.md and phase-2-core-operations.md).
 const MATRIX = {
   'org.view': [1, 1, 1, 1, 1],
   'org.update': [1, 1, 0, 0, 0],
@@ -16,6 +16,14 @@ const MATRIX = {
   'profile.edit_self': [1, 1, 1, 1, 1],
   'activity.view': [1, 1, 0, 0, 0],
   'dashboard.team': [1, 1, 1, 0, 0],
+  'clients.view': [1, 1, 1, 1, 0],
+  'clients.manage': [1, 1, 1, 0, 0],
+  'projects.view': [1, 1, 1, 1, 0],
+  'projects.manage': [1, 1, 1, 0, 0],
+  'tasks.view': [1, 1, 1, 1, 1],
+  'tasks.manage': [1, 1, 1, 0, 0],
+  'tasks.work': [1, 1, 1, 1, 1],
+  'dashboard.agency': [1, 1, 1, 1, 0],
 };
 
 test('the roles and their ranks', () => {
