@@ -9,6 +9,7 @@ const members = require('../services/members');
 const profiles = require('../services/profiles');
 const activity = require('../services/activity');
 const dashboard = require('../services/dashboard');
+const search = require('../services/search');
 const clients = require('../services/clients');
 const projects = require('../services/projects');
 const events = require('../services/events');
@@ -280,6 +281,7 @@ module.exports = function apiRouter(db, { google = null } = {}) {
   r.post('/oauth/requests/:id/approve', (req, res) => res.json(oauth.decideRequest(db, ctxOf(req), req.params.id, { approve: true, access: req.body.access, issuer: originOf(req) })));
   r.post('/oauth/requests/:id/deny', (req, res) => res.json(oauth.decideRequest(db, ctxOf(req), req.params.id, { approve: false, issuer: originOf(req) })));
 
+  r.get('/search', (req, res) => res.json(search.search(db, ctxOf(req), req.query.q, { limit: req.query.limit })));
   r.get('/dashboard', (req, res) => res.json(dashboard.getDashboard(db, ctxOf(req))));
 
   r.use((req, res) => res.status(404).json({ error: 'Not found' }));

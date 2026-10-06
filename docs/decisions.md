@@ -135,3 +135,9 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 - Permissions: `sopchanges.view` and `sopchanges.create` for everyone, `sopchanges.manage` for Manager and above. A Contractor raises one only on an SOP of their own task and sees only their own. Only a manager publishes.
 - An AI can raise requests and edit drafts (identified or needs review). It cannot approve, reject, start, test or publish, enforced in the service and in the plan guard. There is no publish tool.
 - Screens: a Change requests panel and Raise button on the SOP page, `#/sops/changes` with status filters, and a Raise SOP change request shortcut on the QA review sheet.
+## 2026-10-06: Global search and Create
+
+- One search box and one Create button in the app shell (sidebar head on desktop, top bar on phones). `/` opens search. Spec: `docs/specs/2026-10-06-phase-14-search-and-create.md`.
+- Search reuses each owning service's own list function, so what a person can find is exactly what they can open: a Contractor finds only their own tasks, events they attend or created, notes they wrote or attend, and follow-ups assigned to them. At least 2 characters, at most 8 results per group, `%` and `_` searched as plain text. No new migration and no full-text index; plain LIKE is enough at this size.
+- AI gets the same through the read tool `search_agency`, limited to what the key's owner may see.
+- Create offers only what the role's permissions allow. Requests, follow-ups and decisions use small forms in `public/js/views/createforms.js` until their full screens exist. Search results for those open `#/requests/ID`, `#/follow-ups/ID` and `#/decisions/ID`, which need the screens to exist; `#/calendar/ID` and `#/tasks/ID` open the event or task sheet once.

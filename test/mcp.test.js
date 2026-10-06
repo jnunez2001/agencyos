@@ -68,7 +68,7 @@ test('tools/list shows write tools only to keys that can write', async () => {
   const app = await setUp();
   const names = async (access) => (await mcp(app, (await withKey(app, access, access)).token).rpc('tools/list')).result.tools.map((t) => t.name);
   const read = await names('read');
-  assert.deepEqual([...read].sort(), ['list_clients', 'get_client', 'list_projects', 'get_project', 'list_tasks', 'get_task', 'list_events', 'get_event', 'list_meeting_notes', 'get_meeting_note', 'list_requests', 'get_request', 'list_decisions', 'list_follow_ups', 'get_meeting_brief', 'list_notifications', 'list_team', 'get_workload', 'list_sops', 'get_sop', 'list_services', 'list_goals', 'get_metrics', 'list_results', 'get_report_data', 'list_reports', 'get_report', 'list_sop_changes', 'get_sop_change', 'list_qa_queue'].sort());
+  assert.deepEqual([...read].sort(), ['list_clients', 'get_client', 'list_projects', 'get_project', 'list_tasks', 'get_task', 'list_events', 'get_event', 'list_meeting_notes', 'get_meeting_note', 'list_requests', 'get_request', 'list_decisions', 'list_follow_ups', 'get_meeting_brief', 'list_notifications', 'list_team', 'get_workload', 'list_sops', 'get_sop', 'list_services', 'list_goals', 'get_metrics', 'list_results', 'get_report_data', 'list_reports', 'get_report', 'list_sop_changes', 'get_sop_change', 'list_qa_queue', 'search_agency'].sort());
   const propose = await names('propose');
   assert.deepEqual(propose.slice(0, read.length), read);
   assert.ok(['apply_changes', 'create_client', 'create_project', 'create_task', 'update_task', 'add_comment'].every((n) => propose.includes(n)));

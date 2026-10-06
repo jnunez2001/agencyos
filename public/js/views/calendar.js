@@ -152,7 +152,7 @@ export async function openEventForm(session, { event, date } = {}, onChanged) {
 }
 
 // ---- details of one event ----
-function openEventDetails(session, event, onChanged) {
+export function openEventDetails(session, event, onChanged) {
   openSheet(event.title, (close) => {
     const span = localSpan(event);
     const when = event.allDay
@@ -235,7 +235,7 @@ function listView(session, days, onChanged, [from, to], emptyText) {
   return h('div', { class: 'cal-agenda' }, keys.map((k) => h('section', { class: 'cal-agenda-day' }, h('h3', {}, parseKey(k).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })), days.get(k).map((it) => rowOf(session, it, onChanged)))));
 }
 
-export async function calendarView(session, { rerender }) {
+export async function calendarView(session, { param, rerender }) {
   if (!state.anchor) state.anchor = todayKey();
   const range = rangeOf();
   const manage = session.can['events.manage'];
@@ -256,6 +256,11 @@ export async function calendarView(session, { rerender }) {
     clientPick = h('select', { class: 'input', 'aria-label': 'Client', onchange: (e) => { state.clientId = e.target.value; rerender(); } }, [h('option', { value: '' }, 'All clients'), ...clients.map((c) => h('option', { value: c.id, selected: String(c.id) === String(state.clientId) }, c.name))]);
   }
   const onChanged = async () => { await rerender(); };
+  // An address like #/calendar/12 (from search) opens that event once, then goes back to the plain calendar address.
+  if (param) {
+    history.replaceState(null, '', '#/calendar');
+    api('GET', `/events/${encodeURIComponent(param)}`).then((event) => openEventDetails(session, event, onChanged)).catch((e) => alert(e.message));
+  }
   const body = state.view === 'month' ? monthView(session, days, onChanged, goDay)
     : state.view === 'week' ? weekView(session, days, onChanged, goDay)
       : state.view === 'day' ? listView(session, days, onChanged, range, 'Nothing on this day.')

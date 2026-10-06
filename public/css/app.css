@@ -410,3 +410,14 @@ a.btn { text-decoration: none; }
 .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
 .note-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 a.chip { display: inline-flex; align-items: center; text-decoration: none; color: inherit; }
+
+/* ---------- search and create ---------- */
+.quick { display: flex; flex-direction: column; gap: 8px; padding: 0 2px 14px; }
+.quick-search { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); color: var(--muted); font-weight: 500; text-align: left; }
+.quick-search:hover { background: var(--hover); color: var(--ink); }
+.quick-search kbd { padding: 1px 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--card); font: inherit; font-size: 12px; }
+.quick-create { width: 100%; }
+.search-results { display: flex; flex-direction: column; gap: 6px; max-height: 56vh; overflow: auto; }
+.search-group .label { padding-bottom: 2px; }
+.search-group .row:focus-visible { background: var(--hover); outline-offset: -2px; }
+.create-menu { gap: 2px; }

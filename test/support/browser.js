@@ -163,6 +163,17 @@ function answers(role, { mustChange = false, empty = false, signedOut = false } 
     if (/^\/follow-ups\/\d+$/.test(pathname) && method === 'DELETE') return { deleted: true };
     if (/^\/meeting-notes\/\d+\/records$/.test(pathname) && method === 'GET') return { decisions: 0, requests: 0, followUps: 0 };
     if (/^\/meeting-notes\/\d+\/records$/.test(pathname) && method === 'POST') return { noteId: 1, created: { decisions: [{ id: 1 }], requests: [{ id: 1 }], followUps: [{ id: 1 }, { id: 2 }] }, skipped: { decisions: 0, requests: 0, followUps: 0 } };
+    if (pathname === '/search' && method === 'GET') {
+      const q = (new URLSearchParams(url.split('?')[1] || '').get('q') || '').toLowerCase();
+      const groups = [];
+      if (can['clients.view'] && q.includes('acme')) groups.push({ type: 'client', label: 'Clients', results: [{ type: 'client', id: 1, title: 'Acme Dental', subtitle: 'Active', hash: '#/clients/1' }] });
+      if (q.includes('home')) groups.push({ type: 'task', label: 'Tasks', results: [{ type: 'task', id: 1, title: 'Homepage copy', subtitle: 'New website, In progress', hash: '#/tasks/1' }] });
+      return { query: q, groups };
+    }
+    if (pathname === '/requests' && method === 'POST') return { id: 1, ...body, status: 'new' };
+    if (pathname === '/follow-ups' && method === 'POST') return { id: 1, ...body, status: 'open' };
+    if (pathname === '/decisions' && method === 'POST') return { id: 1, ...body, status: 'active' };
+    if (/^\/events\/\d+$/.test(pathname) && method === 'GET') return { ...EVENTS[0], attendees: [], createdBy: 1, canEdit: !!can['events.manage'], canDelete: !!can['events.manage'] };
     if (pathname === '/events' && method === 'POST') return { ...EVENTS[0], id: 9, ...body };
     if (/^\/events\/\d+$/.test(pathname) && method === 'PATCH') return { ...EVENTS[0], ...body };
     if (/^\/events\/\d+$/.test(pathname) && method === 'DELETE') return { deleted: true };
