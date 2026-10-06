@@ -24,6 +24,8 @@ const MATRIX = {
   'tasks.manage': [1, 1, 1, 0, 0],
   'tasks.work': [1, 1, 1, 1, 1],
   'dashboard.agency': [1, 1, 1, 1, 0],
+  'ai.manage': [1, 1, 0, 0, 0],
+  'ai.approve': [1, 1, 0, 0, 0],
 };
 
 test('the roles and their ranks', () => {

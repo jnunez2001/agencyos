@@ -6,6 +6,7 @@ export const NAV = [
   { key: 'projects', label: 'Projects', icon: 'projects', show: (s) => s.can['projects.view'] },
   { key: 'clients', label: 'Clients', icon: 'clients', show: (s) => s.can['clients.view'] },
   { key: 'team', label: 'Team', icon: 'team', show: (s) => s.can['members.list'] },
+  { key: 'ai', label: 'AI', icon: 'sparkle', show: (s) => s.can['ai.manage'] },
   { key: 'activity', label: 'Activity', icon: 'activity', show: (s) => s.can['activity.view'] },
   { key: 'settings', label: 'Settings', icon: 'settings', show: (s) => s.can['org.update'] },
 ];

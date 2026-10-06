@@ -253,3 +253,22 @@ a.row:hover { background: var(--hover); }
   .task-row .grow + .due, .task-row .grow + .pill { margin-left: 21px; }
   .task-row .avatar { margin-left: auto; }
 }
+
+/* ---------- AI ---------- */
+.page.narrow-wide { max-width: 760px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 13px; }
+.code { margin: 0; padding: 12px; border-radius: 10px; background: var(--hover); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.notice-strong { color: var(--danger); font-weight: 600; }
+.steps { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 6px; }
+.proposal h2 { font-size: 16px; font-weight: 700; }
+.pill.ai { background: var(--accent-soft); color: var(--accent); margin-left: 8px; }
+.pill.acc-read { background: var(--hover); color: var(--muted); }
+.pill.acc-propose { background: #fef3c7; color: #92400e; }
+.pill.acc-direct { background: #fee2e2; color: #b91c1c; }
+.pill.pp-pending { background: #fef3c7; color: #92400e; }
+.pill.pp-approved { background: #dcfce7; color: #166534; }
+.pill.pp-rejected { background: var(--hover); color: var(--muted); }
+.pill.pp-failed { background: #fee2e2; color: #b91c1c; }
+:root[data-theme="dark"] .pill.acc-propose, :root[data-theme="dark"] .pill.pp-pending { background: #3a2a0c; color: #fcd34d; }
+:root[data-theme="dark"] .pill.pp-approved { background: #10321d; color: #86efac; }
+:root[data-theme="dark"] .pill.acc-direct, :root[data-theme="dark"] .pill.pp-failed { background: #3b1414; color: #fca5a5; }

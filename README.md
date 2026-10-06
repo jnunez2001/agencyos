@@ -6,7 +6,7 @@ The full product plan is in [docs/blueprint.md](docs/blueprint.md). It is the so
 
 ## Status
 
-Phases 1 and 2 are built. Phase 1: setup, login, organizations, five roles, the team, employee profiles and the activity log. Phase 2: clients with contacts, projects, tasks with comments, list and board views, and a dashboard with my work, agency totals and team workload. SOPs, QA, calendar, time tracking and reports are next.
+Phases 1 and 2 are built. Phase 1: setup, login, organizations, five roles, the team, employee profiles and the activity log. Phase 2: clients with contacts, projects, tasks with comments, list and board views, and a dashboard with my work, agency totals and team workload. Phase 3: AI access. An MCP server at `/mcp` lets an AI such as Claude read and set up your work with an API key, and changes wait in an AI inbox for approval by default. SOPs, QA, calendar, time tracking and reports are next.
 
 ## Run it on your Mac
 
@@ -43,3 +43,7 @@ Plain Node 22 or newer, Express, SQLite and plain JavaScript pages with no build
 ## Deploying to a small server
 
 `deploy/push.sh root@SERVER` runs the tests, copies the code and installs a systemd service that listens on 127.0.0.1:3200 only, with a 192 MB memory cap. Put it on the web with a Cloudflare Tunnel hostname that points at that port. Run `deploy/set-setup-token.sh` on the server before it is reachable. A nightly backup (02:45) keeps the newest 30 copies in `/var/lib/agencyos/backups`. Copy them to your Mac with `deploy/pull-backups.sh root@SERVER`. Nothing here touches other apps on the server.
+
+## Connecting an AI
+
+Sign in as Owner or Admin, open **AI**, then **Keys**, then **New key**. Copy the key (it is shown once) and run the Claude Code command shown with it. A key can be read only, ask first (default) or apply directly, and it never does more than its person could. Details are in `docs/specs/2026-10-06-phase-3-ai-access.md`.

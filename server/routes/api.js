@@ -12,6 +12,8 @@ const dashboard = require('../services/dashboard');
 const clients = require('../services/clients');
 const projects = require('../services/projects');
 const tasks = require('../services/tasks');
+const apikeys = require('../services/apikeys');
+const aiplans = require('../services/aiplans');
 const { ServiceError } = require('../services/errors');
 
 function idParam(req) {
@@ -95,6 +97,14 @@ module.exports = function apiRouter(db) {
   r.delete('/tasks/:id', (req, res) => res.json(tasks.deleteTask(db, ctxOf(req), idParam(req))));
   r.get('/tasks/:id/comments', (req, res) => res.json(tasks.listComments(db, ctxOf(req), idParam(req))));
   r.post('/tasks/:id/comments', (req, res) => res.json(tasks.addComment(db, ctxOf(req), idParam(req), req.body)));
+
+  r.get('/api-keys', (req, res) => res.json(apikeys.listKeys(db, ctxOf(req))));
+  r.post('/api-keys', (req, res) => res.json(apikeys.createKey(db, ctxOf(req), req.body)));
+  r.patch('/api-keys/:id', (req, res) => res.json(apikeys.updateKey(db, ctxOf(req), idParam(req), req.body)));
+  r.delete('/api-keys/:id', (req, res) => res.json(apikeys.revokeKey(db, ctxOf(req), idParam(req))));
+  r.get('/ai/proposals', (req, res) => res.json(aiplans.listProposals(db, ctxOf(req), { status: req.query.status })));
+  r.post('/ai/proposals/:id/approve', (req, res) => res.json(aiplans.approveProposal(db, ctxOf(req), idParam(req))));
+  r.post('/ai/proposals/:id/reject', (req, res) => res.json(aiplans.rejectProposal(db, ctxOf(req), idParam(req))));
 
   r.get('/dashboard', (req, res) => res.json(dashboard.getDashboard(db, ctxOf(req))));
 

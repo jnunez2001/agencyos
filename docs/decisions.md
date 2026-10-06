@@ -34,3 +34,11 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 - Clients and projects are archived, never deleted. A task can be deleted and the activity log keeps what it was.
 - "Today" and "overdue" use the agency's timezone.
 - Spec: `docs/specs/2026-10-06-phase-2-core-operations.md`.
+
+## 2026-10-06: Phase 3 AI access built
+
+- MCP server at `/mcp` with API keys. Keys act as their person with the live role, and have three levels: read only, ask first (default), apply directly.
+- Writes go through all-or-nothing plans. In ask-first mode they wait in the AI inbox and are approved by an Owner or Admin.
+- AI never touches members, roles, passwords, keys or settings, and never deletes.
+- AgencyOS does not call any AI itself, so there is no AI cost.
+- The claude.ai web connector needs OAuth, which is not built. Claude Code works with a header key.

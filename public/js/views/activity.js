@@ -23,12 +23,19 @@ const SENTENCE = {
   'task.update': 'changed a task',
   'task.delete': 'deleted a task',
   'task.comment': 'commented on a task',
+  'apikey.create': 'created an AI key',
+  'apikey.update': 'changed an AI key',
+  'apikey.revoke': 'revoked an AI key',
+  'ai.proposal.create': 'sent changes to the AI inbox',
+  'ai.proposal.approve': 'approved changes from the AI inbox',
+  'ai.proposal.reject': 'rejected changes from the AI inbox',
+  'ai.proposal.fail': 'could not apply approved changes',
   'login.success': 'signed in',
   'login.failed': 'had a failed sign-in',
   'login.locked': 'was locked out after too many tries',
 };
 
-const FIELD = { role: 'Role', displayName: 'Name', isActive: 'Active', name: 'Name', timezone: 'Timezone', username: 'Username', jobTitle: 'Job title', department: 'Department', workDays: 'Working days', title: 'Title', description: 'Description', status: 'Status', priority: 'Priority', dueDate: 'Due date', startDate: 'Start date', estimateHours: 'Estimate', website: 'Website', industry: 'Industry', notes: 'Notes', email: 'Email', phone: 'Phone', roleTitle: 'Role', isPrimary: 'Primary', assigneeId: 'Assignee', managerId: 'Manager', projectId: 'Project', clientId: 'Client', workStart: 'Start', workEnd: 'End', weeklyCapacityHours: 'Capacity' };
+const FIELD = { role: 'Role', displayName: 'Name', isActive: 'Active', name: 'Name', timezone: 'Timezone', username: 'Username', jobTitle: 'Job title', department: 'Department', workDays: 'Working days', access: 'Access', title: 'Title', description: 'Description', status: 'Status', priority: 'Priority', dueDate: 'Due date', startDate: 'Start date', estimateHours: 'Estimate', website: 'Website', industry: 'Industry', notes: 'Notes', email: 'Email', phone: 'Phone', roleTitle: 'Role', isPrimary: 'Primary', assigneeId: 'Assignee', managerId: 'Manager', projectId: 'Project', clientId: 'Client', workStart: 'Start', workEnd: 'End', weeklyCapacityHours: 'Capacity' };
 const show = (v) => (v == null ? 'none' : Array.isArray(v) ? v.join(', ') : typeof v === 'boolean' ? (v ? 'yes' : 'no') : String(v));
 
 const LONG = new Set(['description', 'notes']); // long text and ids are not worth printing
@@ -58,7 +65,7 @@ export async function activityView(session, { rerender }) {
       ? h('section', { class: 'panel list' }, rows.map((r) => h('div', { class: 'row static' },
         avatar({ id: r.actorId || 0, displayName: r.actorName }, 'md'),
         h('div', { class: 'grow' },
-          h('div', { class: 'row-title' }, `${r.actorName} ${SENTENCE[r.action] || r.action}`),
+          h('div', { class: 'row-title' }, `${r.actorName} ${SENTENCE[r.action] || r.action}`, r.source === 'ai' && h('span', { class: 'pill ai' }, 'AI')),
           changes(r).length ? h('div', { class: 'row-sub' }, changes(r).join(' · ')) : null),
         h('span', { class: 'muted nowrap' }, formatWhen(r.createdAt)))))
       : h('section', { class: 'panel' }, h('p', { class: 'muted' }, 'Nothing here yet.')));

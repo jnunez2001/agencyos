@@ -35,7 +35,10 @@ export async function dashboardView(session, { rerender }) {
     h('div', { class: 'panel-head' }, h('h2', {}, 'Team'), h('a', { class: 'link', href: '#/team' }, 'View team')),
     h('div', { class: 'figures' }, figure(t.active, 'Active members'), figure(t.mustChangePassword, 'Not signed in yet')),
     h('ul', { class: 'roles' }, Object.entries(t.byRole).filter(([, n]) => n > 0).map(([role, n]) => h('li', {}, h('span', {}, ROLE_LABEL[role]), h('strong', {}, String(n))))));
+  const inbox = d.aiPending > 0 && h('section', { class: 'panel' },
+    h('div', { class: 'panel-head' }, h('h2', {}, 'AI inbox'), h('a', { class: 'link', href: '#/ai' }, 'Review')),
+    h('p', {}, `${d.aiPending} ${d.aiPending === 1 ? 'plan is' : 'plans are'} waiting for your approval.`));
   return h('div', { class: 'page' },
     h('div', { class: 'page-head' }, h('div', {}, h('p', { class: 'eyebrow' }, d.organization.name), h('h1', { class: 'page-title' }, greeting(d.organization.timezone, d.me.displayName)))),
-    h('div', { class: 'dash' }, h('div', { class: 'stack' }, mine, workload), h('div', { class: 'stack' }, agency, team)));
+    h('div', { class: 'dash' }, h('div', { class: 'stack' }, inbox, mine, workload), h('div', { class: 'stack' }, agency, team)));
 }
