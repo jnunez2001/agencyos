@@ -9,7 +9,7 @@ Joshua Nunez. Nexus asks for two read-only permissions: Search Console (`webmast
 
 ## Your clicks in Google Cloud (about 15 minutes)
 1. Prove you own the domain: open Google Search Console, add `joshnunezseo.com` as a property (a DNS TXT record in Cloudflare, or it may already be verified).
-2. Google Cloud, Google Auth Platform, **Branding**: app name `Nexus`, app logo `public/logo-512.png` (512 px square, upload it), support email `joshnunez.work@gmail.com`, **Application home page** `https://agency.joshnunezseo.com/about`, **Privacy policy** `https://agency.joshnunezseo.com/privacy`, **Terms of service** `https://agency.joshnunezseo.com/terms` (optional), authorized domain `joshnunezseo.com`, developer contact email. A logo is optional.
+2. Google Cloud, Google Auth Platform, **Branding**: app name `NexusOS` (Google does not accept plain "Nexus"), app logo `public/logo-512.png` (512 px square, upload it), support email `joshnunez.work@gmail.com`, **Application home page** `https://agency.joshnunezseo.com/about`, **Privacy policy** `https://agency.joshnunezseo.com/privacy`, **Terms of service** `https://agency.joshnunezseo.com/terms` (optional), authorized domain `joshnunezseo.com`, developer contact email. A logo is optional.
 3. **Data Access**: make sure these scopes are listed: `.../auth/webmasters.readonly`, `.../auth/analytics.readonly` (plus openid, email, profile).
 4. **Audience**: keep "In production".
 5. **Verification Center**: press **Submit for verification**. Paste the justifications below and the link to your video.
