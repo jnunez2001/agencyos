@@ -1,0 +1,52 @@
+// Joshua Nunez
+import { h } from '../dom.js';
+import { api } from '../api.js';
+import { avatar, formatWhen, selectField } from '../ui.js';
+
+// What each action reads as in a sentence. An unknown action shows its own name.
+const SENTENCE = {
+  'organization.setup': 'set up the agency',
+  'organization.update': 'changed the agency settings',
+  'member.create': 'added a member',
+  'member.update': 'changed a member',
+  'member.reset_password': 'reset a password',
+  'profile.update': 'updated a profile',
+  'password.change': 'changed their password',
+  'login.success': 'signed in',
+  'login.failed': 'had a failed sign-in',
+  'login.locked': 'was locked out after too many tries',
+};
+
+const FIELD = { role: 'Role', displayName: 'Name', isActive: 'Active', name: 'Name', timezone: 'Timezone', username: 'Username', jobTitle: 'Job title', department: 'Department', workDays: 'Working days', workStart: 'Start', workEnd: 'End', weeklyCapacityHours: 'Capacity' };
+const show = (v) => (Array.isArray(v) ? v.join(', ') : typeof v === 'boolean' ? (v ? 'yes' : 'no') : String(v));
+
+// "Role: employee to manager" for each field that changed.
+function changes(row) {
+  const after = row.after || {};
+  const before = row.before || {};
+  return Object.keys(after).filter((k) => FIELD[k]).map((k) => (k in before ? `${FIELD[k]}: ${show(before[k])} to ${show(after[k])}` : `${FIELD[k]}: ${show(after[k])}`));
+}
+
+let filter = { actorId: '', action: '' };
+
+export async function activityView(session, { rerender }) {
+  const query = new URLSearchParams();
+  if (filter.actorId) query.set('actorId', filter.actorId);
+  if (filter.action) query.set('action', filter.action);
+  const [rows, people] = await Promise.all([api('GET', `/activity?${query}`), api('GET', '/members')]);
+  const who = selectField('Person', [['', 'Everyone'], ...people.map((m) => [m.id, m.displayName])], filter.actorId, { 'aria-label': 'Person' });
+  const what = selectField('Action', [['', 'Everything'], ...Object.entries(SENTENCE).map(([k, v]) => [k, v])], filter.action, { 'aria-label': 'Action' });
+  who.input.addEventListener('change', () => { filter.actorId = who.input.value; rerender(); });
+  what.input.addEventListener('change', () => { filter.action = what.input.value; rerender(); });
+  return h('div', { class: 'page' },
+    h('div', { class: 'page-head' }, h('h1', { class: 'page-title' }, 'Activity')),
+    h('div', { class: 'filters' }, who.el, what.el),
+    rows.length
+      ? h('section', { class: 'panel list' }, rows.map((r) => h('div', { class: 'row static' },
+        avatar({ id: r.actorId || 0, displayName: r.actorName }, 'md'),
+        h('div', { class: 'grow' },
+          h('div', { class: 'row-title' }, `${r.actorName} ${SENTENCE[r.action] || r.action}`),
+          changes(r).length ? h('div', { class: 'row-sub' }, changes(r).join(' · ')) : null),
+        h('span', { class: 'muted nowrap' }, formatWhen(r.createdAt)))))
+      : h('section', { class: 'panel' }, h('p', { class: 'muted' }, 'Nothing here yet.')));
+}

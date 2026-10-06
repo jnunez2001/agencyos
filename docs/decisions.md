@@ -19,3 +19,10 @@ AgencyOS starts as a personal tool. No paid plans.
 ## 2026-10-06: first milestone
 
 Phases 1 and 2: foundation (login, organization, roles) and core operations (clients, projects, tasks, work views, dashboard). Then use it with real work and improve.
+
+## 2026-10-06: Phase 1 built
+
+- Phase 1 (foundation) is complete and tested: 58 tests, including the permission matrix, organization isolation, the HTTP API and a front-end smoke test as different roles.
+- Team members get a temporary password from an Owner or Admin and must change it at first sign-in. No email is sent.
+- The sidebar shows only the modules that exist. The Client role waits for the client portal.
+- Not reachable from the internet yet. Hosting is still undecided. Before it is, set `SETUP_TOKEN`.

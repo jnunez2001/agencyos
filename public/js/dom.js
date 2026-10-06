@@ -1,0 +1,98 @@
+// Joshua Nunez
+// Tiny DOM helpers. Text always goes in as text nodes, never as HTML.
+
+export function h(tag, attrs, ...children) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (v === true) el.setAttribute(k, '');
+    else el.setAttribute(k, v);
+  }
+  // Falsy children (from `cond && h(...)`) are skipped, so they never print as the word "false".
+  for (const c of children.flat(Infinity)) {
+    if (c == null || c === false || c === true) continue;
+    el.append(c.nodeType ? c : document.createTextNode(String(c)));
+  }
+  return el;
+}
+
+const ICONS = {
+  dashboard: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+  team: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20c0-3.4 2.6-6 6-6s6 2.6 6 6"/><circle cx="17" cy="9" r="2.4"/><path d="M16 14.2c3 0 5 2 5 5.2"/>',
+  activity: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  settings: '<circle cx="12" cy="12" r="3"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8"/>',
+  user: '<circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c0-4 3.4-6.5 7.5-6.5s7.5 2.5 7.5 6.5"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  back: '<path d="M15 6l-6 6 6 6"/>',
+  close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  chevron: '<path d="M9 6l6 6-6 6"/>',
+  logout: '<path d="M9 4H5v16h4M16 8l4 4-4 4M20 12H9"/>',
+  moon: '<path d="M20 14.5A8 8 0 1 1 9.5 4 6.5 6.5 0 0 0 20 14.5z"/>',
+  sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19"/>',
+  key: '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/>',
+};
+
+export function icon(name) {
+  const span = document.createElement('span');
+  span.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name] || ''}</svg>`;
+  return span.firstChild;
+}
+
+// Sheets and the phone's Back button. While any sheet is open there is one extra history entry, so Back closes the
+// sheet instead of leaving the page.
+const openSheets = [];
+let hasEntry = false;
+let ignorePop = 0;
+let backTimer = null;
+
+function addEntry() {
+  if (hasEntry) return;
+  try { history.pushState({ sheet: true }, ''); hasEntry = true; } catch { /* history unavailable */ }
+}
+
+function dropEntrySoon() {
+  clearTimeout(backTimer);
+  backTimer = setTimeout(() => {
+    if (openSheets.length === 0 && hasEntry) { hasEntry = false; ignorePop += 1; history.back(); }
+  }, 0);
+}
+
+window.addEventListener('popstate', () => {
+  if (ignorePop > 0) { ignorePop -= 1; return; }
+  if (openSheets.length === 0) return;
+  hasEntry = false;
+  openSheets[openSheets.length - 1].close({ fromBack: true });
+  if (openSheets.length > 0) addEntry();
+});
+
+export function openSheet(title, build) {
+  const backdrop = h('div', { class: 'sheet-backdrop' });
+  const entry = { close: null };
+  let closed = false;
+  const close = (opts) => {
+    if (closed) return;
+    closed = true;
+    backdrop.remove();
+    document.removeEventListener('keydown', onKey);
+    const i = openSheets.indexOf(entry);
+    if (i >= 0) openSheets.splice(i, 1);
+    if (!(opts && opts.fromBack) && openSheets.length === 0) dropEntrySoon();
+  };
+  entry.close = close;
+  const onKey = (e) => { if (e.key === 'Escape') close(); };
+  const sheet = h('div', { class: 'sheet', role: 'dialog', 'aria-modal': 'true', 'aria-label': title },
+    h('div', { class: 'sheet-head' }, h('h2', {}, title), h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Close', onclick: () => close() }, icon('close'))),
+    build(close));
+  backdrop.append(sheet);
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
+  document.addEventListener('keydown', onKey);
+  document.body.append(backdrop);
+  openSheets.push(entry);
+  clearTimeout(backTimer);
+  addEntry();
+  const first = sheet.querySelector('input:not([type=checkbox]), select');
+  if (first) first.focus();
+  return close;
+}

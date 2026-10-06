@@ -1,0 +1,116 @@
+// Joshua Nunez
+// The shell: routing, the sidebar and bottom bar, and which screen is showing.
+import { h, icon } from './dom.js';
+import { api, setCsrf } from './api.js';
+import { avatar } from './ui.js';
+import { setupView, loginView, changePasswordView } from './views/auth.js';
+import { dashboardView } from './views/dashboard.js';
+import { teamView } from './views/team.js';
+import { profileView } from './views/profile.js';
+import { settingsView } from './views/settings.js';
+import { activityView } from './views/activity.js';
+
+const root = document.getElementById('app');
+let session = null;
+
+// Only the modules that exist show up. A person sees only what their role may use.
+const NAV = [
+  { key: 'dashboard', label: 'Dashboard', icon: 'dashboard', show: () => true },
+  { key: 'team', label: 'Team', icon: 'team', show: (s) => s.can['members.list'] },
+  { key: 'activity', label: 'Activity', icon: 'activity', show: (s) => s.can['activity.view'] },
+  { key: 'settings', label: 'Settings', icon: 'settings', show: (s) => s.can['org.update'] },
+];
+
+const VIEWS = { dashboard: dashboardView, team: teamView, activity: activityView, settings: settingsView, profile: profileView };
+
+function currentTheme() { return document.documentElement.getAttribute('data-theme') || 'light'; }
+function toggleTheme() {
+  const next = currentTheme() === 'dark' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  try { localStorage.setItem('agencyos-theme', next); } catch { /* storage unavailable */ }
+  render();
+}
+
+async function refreshSession() {
+  session = await api('GET', '/session');
+  setCsrf(session.csrf);
+}
+
+async function signOut() {
+  await api('POST', '/logout', {}).catch(() => {});
+  session = null;
+  setCsrf('');
+  location.hash = '';
+  boot();
+}
+
+function routeKey() {
+  const key = location.hash.replace(/^#\/?/, '').split('/')[0] || 'dashboard';
+  const allowed = [...NAV.filter((n) => n.show(session)).map((n) => n.key), 'profile'];
+  if (allowed.includes(key)) return key;
+  // A screen this person may not use: show the dashboard and fix the address so Back does not loop.
+  history.replaceState(null, '', '#/dashboard');
+  return 'dashboard';
+}
+
+function shell(key, main) {
+  const items = NAV.filter((n) => n.show(session));
+  const link = (n, active) => h('a', { class: `nav-link${active ? ' active' : ''}`, href: `#/${n.key}`, 'aria-current': active ? 'page' : null }, icon(n.icon), h('span', {}, n.label));
+  const me = { id: session.user.id, displayName: session.user.displayName };
+  return h('div', { class: 'shell' },
+    h('aside', { class: 'sidebar' },
+      h('div', { class: 'brand-mark' }, h('span', { class: 'brand-dot' }), h('span', {}, 'AgencyOS')),
+      h('p', { class: 'org-name' }, session.organization.name),
+      h('nav', { 'aria-label': 'Main' }, items.map((n) => link(n, n.key === key))),
+      h('div', { class: 'sidebar-foot' },
+        h('a', { class: `me${key === 'profile' ? ' active' : ''}`, href: '#/profile' }, avatar(me, 'sm'), h('span', {}, session.user.displayName)),
+        h('div', { class: 'foot-actions' },
+          h('button', { class: 'icon-btn', type: 'button', 'aria-label': currentTheme() === 'dark' ? 'Use light mode' : 'Use dark mode', onclick: toggleTheme }, icon(currentTheme() === 'dark' ? 'sun' : 'moon')),
+          h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Sign out', onclick: signOut }, icon('logout'))))),
+    h('div', { class: 'content' },
+      h('header', { class: 'topbar' }, h('div', { class: 'brand-mark' }, h('span', { class: 'brand-dot' }), h('span', {}, 'AgencyOS')),
+        h('div', { class: 'foot-actions' },
+          h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Toggle dark mode', onclick: toggleTheme }, icon(currentTheme() === 'dark' ? 'sun' : 'moon')),
+          h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Sign out', onclick: signOut }, icon('logout')))),
+      main),
+    h('nav', { class: 'bottom-nav', 'aria-label': 'Main' }, [...items.map((n) => link(n, n.key === key)),
+      h('a', { class: `nav-link${key === 'profile' ? ' active' : ''}`, href: '#/profile', 'aria-current': key === 'profile' ? 'page' : null }, icon('user'), h('span', {}, 'Me'))]));
+}
+
+let renderSeq = 0;
+async function render() {
+  if (!session) return;
+  const seq = ++renderSeq;
+  const key = routeKey();
+  const main = h('main', { class: 'main' });
+  try {
+    main.append(await VIEWS[key](session, { rerender: render, refresh: async () => { await refreshSession(); await render(); } }));
+  } catch (err) {
+    if (err.status === 401) return boot();
+    if (err.code === 'must_change_password') return boot();
+    main.append(h('section', { class: 'panel' }, h('p', { class: 'muted' }, err.message)));
+  }
+  if (seq !== renderSeq) return; // a newer render replaced this one
+  root.replaceChildren(shell(key, main));
+  window.scrollTo(0, 0);
+}
+
+async function boot() {
+  try {
+    const status = await api('GET', '/status');
+    if (status.needsSetup) return void root.replaceChildren(setupView(status, boot));
+    try {
+      await refreshSession();
+    } catch (err) {
+      if (err.status === 401) return void root.replaceChildren(loginView(boot));
+      throw err;
+    }
+    if (session.user.mustChangePassword) return void root.replaceChildren(changePasswordView(session, boot, signOut));
+    render();
+  } catch (err) {
+    root.replaceChildren(h('div', { class: 'auth' }, h('div', { class: 'auth-card' }, h('h1', {}, 'Cannot reach the server'), h('p', { class: 'muted' }, err.message), h('button', { class: 'btn btn-primary', type: 'button', onclick: boot }, 'Try again'))));
+  }
+}
+
+window.addEventListener('hashchange', render);
+boot();

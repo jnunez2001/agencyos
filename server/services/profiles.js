@@ -63,11 +63,17 @@ function updateProfile(db, ctx, userId, patch = {}) {
   };
   if (next.workEnd <= next.workStart) throw new ServiceError(400, 'Work end must be after work start');
   if (!Number.isInteger(next.weeklyCapacityHours) || next.weeklyCapacityHours < 0 || next.weeklyCapacityHours > 168) throw new ServiceError(400, 'Weekly capacity must be a whole number of hours from 0 to 168');
-  const pick = (p) => ({ jobTitle: p.jobTitle, department: p.department, timezone: p.timezone, workDays: p.workDays, workStart: p.workStart, workEnd: p.workEnd, weeklyCapacityHours: p.weeklyCapacityHours });
+  // Only what changed goes in the log, so the activity page reads as changes and not as a dump.
+  const before = {};
+  const after = {};
+  for (const key of Object.keys(next)) {
+    if (JSON.stringify(next[key]) !== JSON.stringify(current[key])) { before[key] = current[key]; after[key] = next[key]; }
+  }
+  if (Object.keys(after).length === 0) return current;
   db.transaction(() => {
     db.prepare("UPDATE employee_profiles SET job_title = ?, department = ?, timezone = ?, work_days = ?, work_start = ?, work_end = ?, weekly_capacity_hours = ?, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE organization_id = ? AND user_id = ?")
       .run(next.jobTitle, next.department, next.timezone, next.workDays.join(','), next.workStart, next.workEnd, next.weeklyCapacityHours, ctx.organizationId, Number(userId));
-    logActivity(db, { organizationId: ctx.organizationId, actorUserId: ctx.actor.id, action: 'profile.update', objectType: 'member', objectId: Number(userId), before: pick(current), after: pick(next), source: ctx.source || 'web', ip: ctx.ip || null });
+    logActivity(db, { organizationId: ctx.organizationId, actorUserId: ctx.actor.id, action: 'profile.update', objectType: 'member', objectId: Number(userId), before, after, source: ctx.source || 'web', ip: ctx.ip || null });
   })();
   return fetch(db, ctx.organizationId, userId);
 }

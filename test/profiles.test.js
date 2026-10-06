@@ -22,6 +22,17 @@ test('you can edit your own profile, and it is logged with before and after', as
 });
 const before = (log) => log.before_json;
 
+test('the log records only what actually changed', async () => {
+  const f = await fixture();
+  profiles.updateProfile(f.db, f.sarah, f.ids.sarah, { jobTitle: 'Writer', timezone: 'Asia/Manila', workStart: '09:00', weeklyCapacityHours: 40 });
+  const log = f.db.prepare("SELECT * FROM activity_logs WHERE action = 'profile.update'").get();
+  assert.deepEqual(JSON.parse(log.before_json), { jobTitle: '' });
+  assert.deepEqual(JSON.parse(log.after_json), { jobTitle: 'Writer' });
+  // nothing changed means nothing is logged
+  profiles.updateProfile(f.db, f.sarah, f.ids.sarah, { jobTitle: 'Writer' });
+  assert.equal(f.db.prepare("SELECT COUNT(*) AS n FROM activity_logs WHERE action = 'profile.update'").get().n, 1);
+});
+
 test('bad profile values are refused', async () => {
   const f = await fixture();
   const bad = (patch, re) => assert.throws(() => profiles.updateProfile(f.db, f.sarah, f.ids.sarah, patch), re);
