@@ -59,7 +59,7 @@ async function googleSettings(rerender) {
     h('ol', { class: 'steps' },
       h('li', {}, 'In Google Cloud, turn on the Search Console API, Analytics Data API and Analytics Admin API.'),
       h('li', {}, 'Set up the OAuth consent screen (External) and publish it, then create an OAuth client ID of type Web application.'),
-      h('li', {}, `Add these authorized redirect URIs: ${location.origin}/api/integrations/google/callback and ${location.origin}/api/auth/google/callback (the second one is for signing in to AgencyOS with Google).`),
+      h('li', {}, `Add these authorized redirect URIs: ${location.origin}/api/integrations/google/callback and ${location.origin}/api/auth/google/callback (the second one is for signing in to Nexus with Google).`),
       h('li', {}, 'On the server run: bash /root/agencyos/deploy/set-google-oauth.sh, and paste the client ID and secret when asked.')),
     h('p', { class: 'muted' }, 'The secret is stored only on the server and is never shown here.'));
   const service = h('details', { class: 'advanced' },

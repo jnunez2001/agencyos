@@ -53,7 +53,7 @@ export function openGenerate(clientId, clientName, onDone) {
       const body = { periodStart: start.input.value, periodEnd: end.input.value };
       if (title.input.value.trim()) body.title = title.input.value;
       await onDone(await api('POST', `/clients/${clientId}/reports/generate`, body));
-    }, close, h('p', { class: 'muted' }, 'Fills in the work, results, risks and priorities from AgencyOS. You or your AI write the summary and recommendations.'));
+    }, close, h('p', { class: 'muted' }, 'Fills in the work, results, risks and priorities from Nexus. You or your AI write the summary and recommendations.'));
   });
 }
 

@@ -163,3 +163,8 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 ## 2026-10-06: Google verification prep
 
 - Public `/about` home page, a privacy policy with the Google API Services and Limited Use statement, and About and privacy links on the sign-in page, so the app can be submitted for Google verification (read-only Search Console and Analytics, sensitive tier, no audit). Checklist, scope justifications and video script: `docs/google-verification.md`.
+
+## 2026-10-06: Renamed to Nexus
+
+- The product is called Nexus everywhere people see it (screens, login, About, privacy, terms, AI setup text, Google branding). Internal names stay (repo, folder, service `agencyos`, cookies, database file, MCP server id) so nothing already connected breaks.
+- Logo: four connected nodes forming an N, indigo gradient (`public/logo.svg`, `public/favicon.svg`, `public/logo-512.png` made by `scripts/make-logo-png.js`).

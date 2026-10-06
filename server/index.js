@@ -39,7 +39,7 @@ if (google.serviceConfigured || google.oauthConfigured) {
 }
 
 const server = app.listen(config.port, config.host, () => {
-  console.log(`AgencyOS listening on http://${config.host}:${config.port}`);
+  console.log(`Nexus listening on http://${config.host}:${config.port}`);
 });
 
 function shutdown() {

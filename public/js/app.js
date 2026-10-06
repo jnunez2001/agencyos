@@ -67,7 +67,7 @@ function shell(key, main) {
   const me = { id: session.user.id, displayName: session.user.displayName };
   return h('div', { class: 'shell' },
     h('aside', { class: 'sidebar' },
-      h('div', { class: 'brand-mark' }, h('span', { class: 'brand-dot' }), h('span', {}, 'AgencyOS')),
+      h('div', { class: 'brand-mark' }, h('img', { class: 'brand-logo', src: '/logo.png', alt: '', width: 24, height: 24 }), h('span', {}, 'Nexus')),
       quickButtons(session, render),
       h('p', { class: 'org-name' }, session.organization.name),
       h('nav', { 'aria-label': 'Main' }, items.map((n) => link(n, n.key === key))),
@@ -77,7 +77,7 @@ function shell(key, main) {
           h('button', { class: 'icon-btn', type: 'button', 'aria-label': currentTheme() === 'dark' ? 'Use light mode' : 'Use dark mode', onclick: toggleTheme }, icon(currentTheme() === 'dark' ? 'sun' : 'moon')),
           h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Sign out', onclick: signOut }, icon('logout'))))),
     h('div', { class: 'content' },
-      h('header', { class: 'topbar' }, h('div', { class: 'brand-mark' }, h('span', { class: 'brand-dot' }), h('span', {}, 'AgencyOS')),
+      h('header', { class: 'topbar' }, h('div', { class: 'brand-mark' }, h('img', { class: 'brand-logo', src: '/logo.png', alt: '', width: 24, height: 24 }), h('span', {}, 'Nexus')),
         h('div', { class: 'foot-actions' },
           quickButtons(session, render, { compact: true }),
           h('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Toggle dark mode', onclick: toggleTheme }, icon(currentTheme() === 'dark' ? 'sun' : 'moon')),
