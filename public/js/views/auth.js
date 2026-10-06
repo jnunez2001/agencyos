@@ -7,7 +7,8 @@ import { field } from '../ui.js';
 function card(title, ...children) {
   return h('div', { class: 'auth' }, h('div', { class: 'auth-card' },
     h('div', { class: 'brand-mark' }, h('span', { class: 'brand-dot' }), h('span', {}, 'AgencyOS')),
-    h('h1', {}, title), ...children));
+    h('h1', {}, title), ...children,
+    h('p', { class: 'muted' }, h('a', { class: 'link', href: '/about' }, 'About'), ' and ', h('a', { class: 'link', href: '/privacy' }, 'privacy policy'))));
 }
 
 // A form that disables its button while it works and shows the server's message when something is refused.

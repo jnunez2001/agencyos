@@ -159,3 +159,7 @@ Phases 1 and 2: foundation (login, organization, roles) and core operations (cli
 ## 2026-10-06: End-to-end check
 
 - `test/e2e-roadmap.test.js` walks one agency through the roadmap's story over HTTP and MCP (client, retainer, meeting, notes, records, request to task, timer and approved time, retainer warning, SOP change published as a new version, search, AI proposals, contractor limits, activity trail). Per-agency isolation is covered by each service's own tests.
+
+## 2026-10-06: Google verification prep
+
+- Public `/about` home page, a privacy policy with the Google API Services and Limited Use statement, and About and privacy links on the sign-in page, so the app can be submitted for Google verification (read-only Search Console and Analytics, sensitive tier, no audit). Checklist, scope justifications and video script: `docs/google-verification.md`.

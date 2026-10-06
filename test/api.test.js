@@ -153,3 +153,15 @@ test('the privacy policy is public and says what is done with Google data', asyn
   assert.ok(!html.includes('\u2014'));
   await app.close();
 });
+
+test('the public About and privacy pages need no sign-in and carry the Google statements', async () => {
+  const app = await setUp();
+  for (const [path, words] of [['/about', /read-only access|only reads/i], ['/privacy', /Limited Use/]]) {
+    const res = await fetch(app.base.replace('/api', path));
+    assert.equal(res.status, 200, path);
+    const html = await res.text();
+    assert.match(html, words, path);
+    assert.match(html, /Google API Services User Data Policy/, path);
+  }
+  await app.close();
+});
